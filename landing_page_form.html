@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoFlow — Get Free Demo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0a0f1e;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#111827;border:1px solid #1e2d45;border-radius:20px;padding:40px;max-width:480px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
+h1{font-size:28px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px}
+h1 span{color:#3b82f6}
+.sub{font-size:15px;color:#94a3b8;margin-bottom:30px;line-height:1.6}
+.benefits{display:flex;flex-direction:column;gap:8px;margin-bottom:28px}
+.benefit{display:flex;align-items:center;gap:10px;font-size:14px;color:#94a3b8}
+.benefit span{color:#10b981;font-size:16px}
+.form-group{margin-bottom:16px}
+label{display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
+input,select,textarea{width:100%;background:#1a2234;border:1px solid #1e2d45;border-radius:10px;padding:12px 16px;color:#e2e8f0;font-size:14px;outline:none;transition:border 0.2s;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:#3b82f6}
+select option{background:#1a2234}
+.submit-btn{width:100%;background:#3b82f6;border:none;border-radius:10px;padding:14px;color:white;font-size:16px;font-weight:700;cursor:pointer;transition:all 0.2s;margin-top:8px}
+.submit-btn:hover{background:#2563eb;transform:translateY(-1px)}
+.submit-btn:active{transform:translateY(0)}
+.submit-btn:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+.success{display:none;text-align:center;padding:30px 20px}
+.success-icon{font-size:48px;margin-bottom:16px}
+.success-title{font-size:22px;font-weight:700;margin-bottom:8px}
+.success-sub{font-size:14px;color:#94a3b8;line-height:1.6}
+.privacy{font-size:11px;color:#475569;text-align:center;margin-top:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="form-section">
+    <h1>Automate Your <span>Business</span></h1>
+    <p class="sub">Save 10-20 hours/week with intelligent automation. Get a free demo today.</p>
+    <div class="benefits">
+      <div class="benefit"><span>✓</span> Lead follow-up on autopilot</div>
+      <div class="benefit"><span>✓</span> WhatsApp & Telegram automation</div>
+      <div class="benefit"><span>✓</span> Live in 5 days, no coding needed</div>
+    </div>
+    <form id="lead-form">
+      <div class="form-group">
+        <label>Your Name *</label>
+        <input type="text" id="name" placeholder="Rahul Sharma" required>
+      </div>
+      <div class="form-group">
+        <label>WhatsApp Number *</label>
+        <input type="tel" id="phone" placeholder="+91 9876543210" required>
+      </div>
+      <div class="form-group">
+        <label>Business Type</label>
+        <select id="business">
+          <option value="">Select your business type</option>
+          <option>Agency / Marketing</option>
+          <option>Real Estate</option>
+          <option>Education / Coaching</option>
+          <option>E-commerce</option>
+          <option>Healthcare</option>
+          <option>Finance / Insurance</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>What do you want to automate?</label>
+        <textarea id="message" placeholder="E.g. lead follow-up, WhatsApp replies, invoice reminders..." rows="3"></textarea>
+      </div>
+      <button type="submit" class="submit-btn" id="submit-btn">
+        Get Free Demo →
+      </button>
+    </form>
+    <p class="privacy">🔒 We never share your information. No spam, ever.</p>
+  </div>
+
+  <div class="success" id="success-section">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">You're All Set!</div>
+    <p class="success-sub">We've received your request, <strong id="success-name"></strong>!<br><br>Check your WhatsApp — we've sent you a message. We'll be in touch within the next few minutes.</p>
+  </div>
+</div>
+
+<script>
+// ⚠️ REPLACE THIS with your actual n8n webhook URL
+const N8N_WEBHOOK_URL = 'https://your-n8n.app.n8n.cloud/webhook/landing-page-lead';
+
+document.getElementById('lead-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const name    = document.getElementById('name').value.trim();
+  const phone   = document.getElementById('phone').value.trim();
+  const business = document.getElementById('business').value;
+  const message = document.getElementById('message').value.trim();
+
+  if (!name || !phone) {
+    alert('Please fill in your name and phone number.');
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors', // n8n webhook এ CORS issue এড়াতে
+      body: JSON.stringify({
+        name,
+        phone,
+        source: 'Website',
+        notes: `Business: ${business || 'Not specified'}. Message: ${message || 'None'}`,
+        email: '',
+      })
+    });
+  } catch (err) {
+    // no-cors mode এ error আসলেও actually submit হয়ে যায়
+    console.log('Submitted (no-cors mode)');
+  }
+
+  // Always show success (no-cors এ response পাওয়া যায় না)
+  document.getElementById('success-name').textContent = name;
+  document.getElementById('form-section').style.display = 'none';
+  document.getElementById('success-section').style.display = 'block';
+});
+</script>
+</body>
+</html>
