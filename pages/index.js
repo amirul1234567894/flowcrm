@@ -41,7 +41,7 @@ export default function CRM() {
       const res = await fetch('/api/leads')
       if (res.ok) {
         const data = await res.json()
-        setLeads(data)
+        if (Array.isArray(data)) setLeads(data)
       }
     } catch(e) { console.error('fetchLeads error:', e) }
     setLoading(false)
@@ -177,10 +177,11 @@ export default function CRM() {
           </div>
         ))}
         <div style={{marginTop:'auto',padding:'16px',borderTop:'1px solid var(--br)'}}>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
             <div className="uav">A</div>
             <div><div style={{fontSize:13,fontWeight:500}}>Admin</div><div style={{fontSize:11,color:'var(--t3)'}}>AutoFlow</div></div>
           </div>
+          <button className="btn br" style={{width:'100%',justifyContent:'center',fontSize:12}} onClick={()=>{localStorage.removeItem('af_logged_in');localStorage.removeItem('af_pw_hash');router.replace('/login')}}>🚪 Sign Out</button>
         </div>
       </aside>
 
