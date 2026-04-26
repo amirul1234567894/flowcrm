@@ -4,96 +4,670 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AutoFlow — Get Free Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0a0f1e;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#111827;border:1px solid #1e2d45;border-radius:20px;padding:40px;max-width:480px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
-h1{font-size:28px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px}
-h1 span{color:#3b82f6}
-.sub{font-size:15px;color:#94a3b8;margin-bottom:30px;line-height:1.6}
-.benefits{display:flex;flex-direction:column;gap:8px;margin-bottom:28px}
-.benefit{display:flex;align-items:center;gap:10px;font-size:14px;color:#94a3b8}
-.benefit span{color:#10b981;font-size:16px}
+
+:root{
+  --bg:#0a0f1e;
+  --card:#111827;
+  --border:#1e2d45;
+  --input-bg:#1a2234;
+  --blue:#3b82f6;
+  --blue-dark:#2563eb;
+  --green:#10b981;
+  --text:#e2e8f0;
+  --muted:#94a3b8;
+  --label:#475569;
+}
+
+body{
+  font-family:'Space Grotesk',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  position:relative;
+  overflow-x:hidden;
+}
+
+/* Ambient background blobs */
+body::before{
+  content:'';
+  position:fixed;
+  top:-20%;left:-10%;
+  width:60vw;height:60vw;
+  background:radial-gradient(circle,rgba(59,130,246,0.08) 0%,transparent 70%);
+  pointer-events:none;
+  z-index:0;
+}
+body::after{
+  content:'';
+  position:fixed;
+  bottom:-20%;right:-10%;
+  width:50vw;height:50vw;
+  background:radial-gradient(circle,rgba(16,185,129,0.06) 0%,transparent 70%);
+  pointer-events:none;
+  z-index:0;
+}
+
+/* ── SCREEN ROUTER ── */
+.screen{display:none;position:relative;z-index:1;width:100%}
+.screen.active{display:flex;justify-content:center}
+
+/* ══════════════════════════════
+   LOGIN SCREEN
+══════════════════════════════ */
+#login-screen{
+  align-items:center;
+  min-height:100vh;
+}
+
+.login-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:40px 36px;
+  width:100%;
+  max-width:420px;
+  box-shadow:0 24px 80px rgba(0,0,0,0.5);
+  animation:fadeUp 0.4s ease;
+}
+
+.login-logo{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:28px;
+}
+.login-logo .logo-icon{
+  width:38px;height:38px;
+  background:linear-gradient(135deg,#3b82f6,#06b6d4);
+  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;
+}
+.login-logo .logo-text{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+.login-logo .logo-text span{color:var(--blue)}
+
+.login-title{font-size:24px;font-weight:800;margin-bottom:6px}
+.login-sub{font-size:14px;color:var(--muted);margin-bottom:28px}
+
 .form-group{margin-bottom:16px}
-label{display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
-input,select,textarea{width:100%;background:#1a2234;border:1px solid #1e2d45;border-radius:10px;padding:12px 16px;color:#e2e8f0;font-size:14px;outline:none;transition:border 0.2s;font-family:inherit}
-input:focus,select:focus,textarea:focus{border-color:#3b82f6}
-select option{background:#1a2234}
-.submit-btn{width:100%;background:#3b82f6;border:none;border-radius:10px;padding:14px;color:white;font-size:16px;font-weight:700;cursor:pointer;transition:all 0.2s;margin-top:8px}
-.submit-btn:hover{background:#2563eb;transform:translateY(-1px)}
-.submit-btn:active{transform:translateY(0)}
-.submit-btn:disabled{opacity:0.6;cursor:not-allowed;transform:none}
-.success{display:none;text-align:center;padding:30px 20px}
-.success-icon{font-size:48px;margin-bottom:16px}
-.success-title{font-size:22px;font-weight:700;margin-bottom:8px}
-.success-sub{font-size:14px;color:#94a3b8;line-height:1.6}
-.privacy{font-size:11px;color:#475569;text-align:center;margin-top:14px;line-height:1.6}
+label{display:block;font-size:11px;font-weight:700;color:var(--label);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:7px}
+
+input,select,textarea{
+  width:100%;
+  background:var(--input-bg);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:12px 16px;
+  color:var(--text);
+  font-size:14px;
+  font-family:inherit;
+  outline:none;
+  transition:border 0.2s,box-shadow 0.2s;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:var(--blue);
+  box-shadow:0 0 0 3px rgba(59,130,246,0.12);
+}
+select option{background:var(--input-bg)}
+textarea{resize:vertical}
+
+.btn-primary{
+  width:100%;
+  background:var(--blue);
+  border:none;
+  border-radius:10px;
+  padding:14px;
+  color:white;
+  font-size:15px;
+  font-weight:700;
+  font-family:inherit;
+  cursor:pointer;
+  transition:all 0.2s;
+  margin-top:4px;
+  letter-spacing:0.01em;
+}
+.btn-primary:hover{background:var(--blue-dark);transform:translateY(-1px);box-shadow:0 8px 24px rgba(59,130,246,0.3)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{opacity:0.6;cursor:not-allowed;transform:none;box-shadow:none}
+
+.error-msg{
+  background:rgba(239,68,68,0.1);
+  border:1px solid rgba(239,68,68,0.3);
+  border-radius:8px;
+  padding:10px 14px;
+  font-size:13px;
+  color:#f87171;
+  margin-bottom:16px;
+  display:none;
+}
+.error-msg.show{display:block}
+
+.input-row{position:relative}
+.toggle-pw{
+  position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;color:var(--label);font-size:16px;
+  padding:4px;line-height:1;
+}
+.toggle-pw:hover{color:var(--muted)}
+
+/* ══════════════════════════════
+   MAIN APP (after login)
+══════════════════════════════ */
+#app-screen{
+  flex-direction:column;
+  align-items:stretch;
+  min-height:100vh;
+  padding:0;
+}
+
+/* Top Nav */
+.topnav{
+  background:var(--card);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.nav-logo{display:flex;align-items:center;gap:8px}
+.nav-logo .logo-icon{width:30px;height:30px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.nav-logo .logo-text{font-size:18px;font-weight:800;letter-spacing:-0.5px}
+.nav-logo .logo-text span{color:var(--blue)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-user{font-size:13px;color:var(--muted);display:none}
+.logout-btn{
+  background:rgba(239,68,68,0.1);
+  border:1px solid rgba(239,68,68,0.2);
+  border-radius:8px;
+  padding:7px 14px;
+  color:#f87171;
+  font-size:13px;
+  font-weight:600;
+  font-family:inherit;
+  cursor:pointer;
+  transition:all 0.2s;
+  white-space:nowrap;
+}
+.logout-btn:hover{background:rgba(239,68,68,0.2)}
+
+/* App content */
+.app-content{
+  flex:1;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:24px 16px;
+}
+
+/* ══════════════════════════════
+   LEAD FORM CARD
+══════════════════════════════ */
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:36px 32px;
+  max-width:520px;
+  width:100%;
+  box-shadow:0 24px 80px rgba(0,0,0,0.5);
+  animation:fadeUp 0.4s ease;
+}
+
+h1{font-size:26px;font-weight:800;margin-bottom:8px;letter-spacing:-0.5px;line-height:1.2}
+h1 span{color:var(--blue)}
+.sub{font-size:14px;color:var(--muted);margin-bottom:24px;line-height:1.6}
+
+.benefits{display:flex;flex-direction:column;gap:8px;margin-bottom:26px}
+.benefit{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.benefit .check{color:var(--green);font-size:15px;flex-shrink:0}
+
+.privacy{font-size:11px;color:var(--label);text-align:center;margin-top:14px;line-height:1.6}
+
+/* ── SUCCESS ── */
+.success{
+  display:none;
+  text-align:center;
+  padding:30px 20px;
+  animation:fadeUp 0.3s ease;
+}
+.success-icon{font-size:52px;margin-bottom:16px}
+.success-title{font-size:22px;font-weight:800;margin-bottom:8px}
+.success-sub{font-size:14px;color:var(--muted);line-height:1.7}
+
+/* ── FORGOT PASSWORD LINK ── */
+.forgot-link{text-align:right;margin-top:-8px;margin-bottom:16px}
+.forgot-link a{font-size:12px;color:var(--blue);cursor:pointer;text-decoration:none;opacity:0.85;transition:opacity 0.2s}
+.forgot-link a:hover{opacity:1;text-decoration:underline}
+
+/* ── RESET MODAL ── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.72);backdrop-filter:blur(4px);
+  z-index:999;align-items:center;justify-content:center;padding:16px;
+}
+.modal-overlay.open{display:flex;animation:fadeIn 0.2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-box{
+  background:var(--card);border:1px solid var(--border);border-radius:18px;
+  padding:32px 28px;width:100%;max-width:400px;
+  box-shadow:0 24px 80px rgba(0,0,0,0.6);
+  animation:fadeUp 0.25s ease;position:relative;
+}
+.modal-close{
+  position:absolute;top:14px;right:16px;background:none;border:none;
+  color:var(--label);font-size:20px;cursor:pointer;line-height:1;transition:color 0.2s;
+}
+.modal-close:hover{color:var(--text)}
+.modal-step{display:none}
+.modal-step.active{display:block;animation:fadeUp 0.2s ease}
+.modal-title{font-size:20px;font-weight:800;margin-bottom:6px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:22px;line-height:1.5}
+.success-msg{
+  background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);
+  border-radius:8px;padding:10px 14px;font-size:13px;color:#34d399;
+  margin-bottom:16px;display:none;
+}
+.success-msg.show{display:block}
+.pw-strength{height:3px;border-radius:2px;margin-top:6px;background:var(--border);transition:all 0.3s}
+.pw-strength.weak{background:#ef4444;width:33%}
+.pw-strength.medium{background:#f59e0b;width:66%}
+.pw-strength.strong{background:#10b981;width:100%}
+.step-badge{
+  display:inline-block;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);
+  color:var(--blue);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
+  margin-bottom:14px;letter-spacing:0.05em;text-transform:uppercase;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(16px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* ══════════════════════════════
+   RESPONSIVE — TABLET & MOBILE
+══════════════════════════════ */
+@media(max-width:600px){
+  body{padding:12px}
+
+  .login-card{
+    padding:28px 22px;
+    border-radius:16px;
+  }
+  .login-title{font-size:20px}
+
+  .card{
+    padding:24px 18px;
+    border-radius:16px;
+  }
+  h1{font-size:22px}
+
+  .topnav{padding:10px 14px}
+  .nav-user{display:none !important}
+}
+
+@media(min-width:601px) and (max-width:900px){
+  /* Tablet */
+  body{padding:20px}
+  .login-card{max-width:460px}
+  .card{max-width:500px}
+  .nav-user{display:block}
+}
+
+@media(min-width:901px){
+  .nav-user{display:block}
+}
 </style>
 </head>
 <body>
-<div class="card">
-  <div id="form-section">
-    <h1>Automate Your <span>Business</span></h1>
-    <p class="sub">Save 10-20 hours/week with intelligent automation. Get a free demo today.</p>
-    <div class="benefits">
-      <div class="benefit"><span>✓</span> Lead follow-up on autopilot</div>
-      <div class="benefit"><span>✓</span> WhatsApp & Telegram automation</div>
-      <div class="benefit"><span>✓</span> Live in 5 days, no coding needed</div>
-    </div>
-    <form id="lead-form">
-      <div class="form-group">
-        <label>Your Name *</label>
-        <input type="text" id="name" placeholder="Rahul Sharma" required>
-      </div>
-      <div class="form-group">
-        <label>WhatsApp Number *</label>
-        <input type="tel" id="phone" placeholder="+91 9876543210" required>
-      </div>
-      <div class="form-group">
-        <label>Business Type</label>
-        <select id="business">
-          <option value="">Select your business type</option>
-          <option>Agency / Marketing</option>
-          <option>Real Estate</option>
-          <option>Education / Coaching</option>
-          <option>E-commerce</option>
-          <option>Healthcare</option>
-          <option>Finance / Insurance</option>
-          <option>Other</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>What do you want to automate?</label>
-        <textarea id="message" placeholder="E.g. lead follow-up, WhatsApp replies, invoice reminders..." rows="3"></textarea>
-      </div>
-      <button type="submit" class="submit-btn" id="submit-btn">
-        Get Free Demo →
-      </button>
-    </form>
-    <p class="privacy">🔒 We never share your information. No spam, ever.</p>
-  </div>
 
-  <div class="success" id="success-section">
-    <div class="success-icon">🎉</div>
-    <div class="success-title">You're All Set!</div>
-    <p class="success-sub">We've received your request, <strong id="success-name"></strong>!<br><br>Check your WhatsApp — we've sent you a message. We'll be in touch within the next few minutes.</p>
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen" class="screen active">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">Auto<span>Flow</span></div>
+    </div>
+    <div class="login-title">Welcome Back</div>
+    <p class="login-sub">Sign in to access your CRM dashboard</p>
+
+    <div class="error-msg" id="login-error">❌ Invalid email or password. Please try again.</div>
+
+    <div class="form-group">
+      <label>Email Address</label>
+      <input type="email" id="login-email" placeholder="Enter your email" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <div class="input-row">
+        <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password">
+        <button class="toggle-pw" id="toggle-pw" type="button" title="Show/hide password">👁</button>
+      </div>
+    </div>
+    <div class="forgot-link"><a onclick="openReset()">Forgot password?</a></div>
+    <button class="btn-primary" id="login-btn" onclick="doLogin();" >Sign In →</button>
   </div>
 </div>
 
+<!-- ══ FORGOT PASSWORD MODAL ══ -->
+<div class="modal-overlay" id="reset-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeReset()">✕</button>
+    <!-- Step 1: Secret Question -->
+    <div class="modal-step active" id="step1">
+      <div class="step-badge">Step 1 of 2</div>
+      <div class="modal-title">🔐 Reset Password</div>
+      <p class="modal-sub">Answer your secret question to verify your identity.</p>
+      <div class="error-msg" id="sq-error">❌ Wrong answer. Please try again.</div>
+      <div class="form-group">
+        <label>Secret Question</label>
+        <input type="text" value="What is the name of your first business?" readonly style="opacity:0.6;cursor:default">
+      </div>
+      <div class="form-group">
+        <label>Your Answer *</label>
+        <input type="text" id="sq-answer" placeholder="Type your answer..." autocomplete="off">
+      </div>
+      <button class="btn-primary" onclick="checkSecretQ()">Verify Answer →</button>
+    </div>
+    <!-- Step 2: New Password -->
+    <div class="modal-step" id="step2">
+      <div class="step-badge">Step 2 of 2</div>
+      <div class="modal-title">🔑 New Password</div>
+      <p class="modal-sub">Choose a strong new password for your account.</p>
+      <div class="success-msg" id="reset-success">✅ Password updated! You can now sign in.</div>
+      <div class="form-group" id="newpw-group">
+        <label>New Password *</label>
+        <div class="input-row">
+          <input type="password" id="new-password" placeholder="Min. 8 characters" oninput="checkStrength(this.value)">
+          <button class="toggle-pw" id="toggle-new-pw" type="button">👁</button>
+        </div>
+        <div class="pw-strength" id="pw-strength"></div>
+      </div>
+      <div class="form-group" id="confirmpw-group">
+        <label>Confirm Password *</label>
+        <input type="password" id="confirm-password" placeholder="Re-enter password">
+      </div>
+      <div class="error-msg" id="pw-error">❌ Passwords do not match or too short (min 8 chars).</div>
+      <button class="btn-primary" id="save-pw-btn" onclick="saveNewPassword()">Save New Password →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ APP SCREEN ══ -->
+<div id="app-screen" class="screen">
+  <!-- Top Nav -->
+  <div class="topnav">
+    <div class="nav-logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">Auto<span>Flow</span></div>
+    </div>
+    <div class="nav-right">
+      <div class="nav-user" id="nav-user-label">👤 Admin</div>
+      <button class="logout-btn" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Lead Form -->
+  <div class="app-content">
+    <div class="card">
+      <div id="form-section">
+        <h1>Automate Your <span>Business</span></h1>
+        <p class="sub">Save 10–20 hours/week with intelligent automation. Get a free demo today.</p>
+        <div class="benefits">
+          <div class="benefit"><span class="check">✓</span> Lead follow-up on autopilot</div>
+          <div class="benefit"><span class="check">✓</span> WhatsApp & Telegram automation</div>
+          <div class="benefit"><span class="check">✓</span> Live in 5 days, no coding needed</div>
+        </div>
+        <form id="lead-form">
+          <div class="form-group">
+            <label>Your Name *</label>
+            <input type="text" id="name" placeholder="Rahul Sharma" required>
+          </div>
+          <div class="form-group">
+            <label>WhatsApp Number *</label>
+            <input type="tel" id="phone" placeholder="+91 9876543210" required>
+          </div>
+          <div class="form-group">
+            <label>Business Type</label>
+            <select id="business">
+              <option value="">Select your business type</option>
+              <option>Agency / Marketing</option>
+              <option>Real Estate</option>
+              <option>Education / Coaching</option>
+              <option>E-commerce</option>
+              <option>Healthcare</option>
+              <option>Finance / Insurance</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>What do you want to automate?</label>
+            <textarea id="message" placeholder="E.g. lead follow-up, WhatsApp replies, invoice reminders..." rows="3"></textarea>
+          </div>
+          <button type="submit" class="btn-primary" id="submit-btn">Get Free Demo →</button>
+        </form>
+        <p class="privacy">🔒 We never share your information. No spam, ever.</p>
+      </div>
+
+      <div class="success" id="success-section">
+        <div class="success-icon">🎉</div>
+        <div class="success-title">You're All Set!</div>
+        <p class="success-sub">We've received your request, <strong id="success-name"></strong>!<br><br>Check your WhatsApp — we've sent you a message. We'll be in touch within the next few minutes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script>
-// ⚠️ REPLACE THIS with your actual n8n webhook URL
+// ⚠️ Replace with your actual n8n webhook URL
 const N8N_WEBHOOK_URL = 'https://your-n8n.app.n8n.cloud/webhook/landing-page-lead';
 
-document.getElementById('lead-form').addEventListener('submit', async function(e) {
+// ─── HASHED CREDENTIALS (SHA-256, not plain text) ─────
+// These are SHA-256 hashes — original credentials NOT visible in source
+const H_EMAIL = 'f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b';
+const H_PASS  = 'b3b738b8a07fed22c71b6e3e8b02d99bd25a1bb8b069ee93aeb6e8c9d91f6524';
+
+async function sha256(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// ─── SESSION CHECK ────────────────────────────────────
+(function(){
+  if(sessionStorage.getItem('af_logged_in') === '1') showApp();
+})();
+
+// ─── LOGIN ────────────────────────────────────────────
+async function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn   = document.getElementById('login-btn');
+
+  errEl.classList.remove('show');
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
+  const [hEmail, hPass] = await Promise.all([sha256(email), sha256(pass)]);
+
+  const activePassHash = runtimePassHash || H_PASS;
+  if(hEmail === H_EMAIL && hPass === activePassHash){
+    sessionStorage.setItem('af_logged_in','1');
+    btn.textContent = '✓ Logging in...';
+    setTimeout(showApp, 400);
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Sign In →';
+    errEl.classList.add('show');
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-password').focus();
+  }
+}
+
+// ─── SHOW APP ─────────────────────────────────────────
+function showApp(){
+  document.getElementById('login-screen').classList.remove('active');
+  document.getElementById('app-screen').classList.add('active');
+  document.getElementById('nav-user-label').textContent = '👤 Admin';
+}
+
+// ─── LOGOUT ───────────────────────────────────────────
+function doLogout(){
+  sessionStorage.removeItem('af_logged_in');
+  // Reset form state too
+  document.getElementById('form-section').style.display='block';
+  document.getElementById('success-section').style.display='none';
+  document.getElementById('lead-form').reset();
+  document.getElementById('submit-btn').textContent='Get Free Demo →';
+  document.getElementById('submit-btn').disabled=false;
+  // Reset login button
+  const lBtn = document.getElementById('login-btn');
+  lBtn.textContent='Sign In →';
+  lBtn.disabled=false;
+  document.getElementById('login-error').classList.remove('show');
+
+  document.getElementById('app-screen').classList.remove('active');
+  document.getElementById('login-screen').classList.add('active');
+}
+
+
+// ─── SECRET QUESTION ANSWER (SHA-256 hashed) ──────────
+// Original answer: "autoflow"  (case-insensitive, stored as hash)
+const H_SECRET_ANS = '2c04410d922c25b5fcc6ab037a86b0d7b3d56d1990a11523e6adf7c083f4ddb9';
+
+// Runtime storage for new password hash (session only)
+let runtimePassHash = null;
+
+// ─── FORGOT PASSWORD MODAL ────────────────────────────
+function openReset(){
+  document.getElementById('reset-modal').classList.add('open');
+  document.getElementById('sq-answer').value='';
+  document.getElementById('sq-error').classList.remove('show');
+  document.getElementById('step1').classList.add('active');
+  document.getElementById('step2').classList.remove('active');
+  document.getElementById('new-password').value='';
+  document.getElementById('confirm-password').value='';
+  document.getElementById('pw-error').classList.remove('show');
+  document.getElementById('reset-success').classList.remove('show');
+  document.getElementById('pw-strength').className='pw-strength';
+  document.getElementById('save-pw-btn').style.display='block';
+}
+
+function closeReset(){
+  document.getElementById('reset-modal').classList.remove('open');
+}
+
+// Close modal on overlay click
+document.getElementById('reset-modal').addEventListener('click',function(e){
+  if(e.target===this) closeReset();
+});
+
+// ─── STEP 1: Check Secret Answer ─────────────────────
+async function checkSecretQ(){
+  const ans = document.getElementById('sq-answer').value.trim().toLowerCase();
+  const errEl = document.getElementById('sq-error');
+  errEl.classList.remove('show');
+
+  if(!ans){ errEl.classList.add('show'); return; }
+
+  const hAns = await sha256(ans);
+  if(hAns === H_SECRET_ANS){
+    document.getElementById('step1').classList.remove('active');
+    document.getElementById('step2').classList.add('active');
+  } else {
+    errEl.classList.add('show');
+    document.getElementById('sq-answer').value='';
+    document.getElementById('sq-answer').focus();
+  }
+}
+
+// ─── PASSWORD STRENGTH METER ──────────────────────────
+function checkStrength(pw){
+  const bar = document.getElementById('pw-strength');
+  bar.className = 'pw-strength';
+  if(!pw){ return; }
+  if(pw.length < 6){ bar.classList.add('weak'); return; }
+  const strong = /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw) && pw.length >= 8;
+  const medium = pw.length >= 6;
+  bar.classList.add(strong ? 'strong' : medium ? 'medium' : 'weak');
+}
+
+// ─── STEP 2: Save New Password ────────────────────────
+async function saveNewPassword(){
+  const np = document.getElementById('new-password').value;
+  const cp = document.getElementById('confirm-password').value;
+  const errEl = document.getElementById('pw-error');
+  errEl.classList.remove('show');
+
+  if(np.length < 8 || np !== cp){
+    errEl.classList.add('show');
+    return;
+  }
+
+  runtimePassHash = await sha256(np);
+
+  // Hide form, show success
+  document.getElementById('newpw-group').style.display='none';
+  document.getElementById('confirmpw-group').style.display='none';
+  document.getElementById('save-pw-btn').style.display='none';
+  document.getElementById('reset-success').classList.add('show');
+
+  setTimeout(closeReset, 2000);
+
+  // Restore hidden fields after modal closes
+  setTimeout(()=>{
+    document.getElementById('newpw-group').style.display='block';
+    document.getElementById('confirmpw-group').style.display='block';
+  }, 2500);
+}
+
+// ─── TOGGLE NEW PASSWORD VISIBILITY ──────────────────
+document.getElementById('toggle-new-pw').addEventListener('click',function(){
+  const inp = document.getElementById('new-password');
+  if(inp.type==='password'){inp.type='text';this.textContent='🙈'}
+  else{inp.type='password';this.textContent='👁'}
+});
+
+// Enter key on secret answer
+document.getElementById('sq-answer').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); checkSecretQ(); }
+});
+
+// ─── ENTER KEY on login ───────────────────────────────
+['login-email','login-password'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); doLogin(); }
+  });
+});
+
+// ─── SHOW/HIDE PASSWORD ───────────────────────────────
+document.getElementById('toggle-pw').addEventListener('click',function(){
+  const inp = document.getElementById('login-password');
+  if(inp.type==='password'){inp.type='text';this.textContent='🙈'}
+  else{inp.type='password';this.textContent='👁'}
+});
+
+// ─── LEAD FORM SUBMIT ─────────────────────────────────
+document.getElementById('lead-form').addEventListener('submit', async function(e){
   e.preventDefault();
 
-  const name    = document.getElementById('name').value.trim();
-  const phone   = document.getElementById('phone').value.trim();
+  const name     = document.getElementById('name').value.trim();
+  const phone    = document.getElementById('phone').value.trim();
   const business = document.getElementById('business').value;
-  const message = document.getElementById('message').value.trim();
+  const message  = document.getElementById('message').value.trim();
 
-  if (!name || !phone) {
-    alert('Please fill in your name and phone number.');
+  if(!name || !phone){
+    alert('Please fill in your name and WhatsApp number.');
     return;
   }
 
@@ -101,25 +675,22 @@ document.getElementById('lead-form').addEventListener('submit', async function(e
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
-  try {
-    await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      mode: 'no-cors', // n8n webhook এ CORS issue এড়াতে
-      body: JSON.stringify({
-        name,
-        phone,
-        source: 'Website',
-        notes: `Business: ${business || 'Not specified'}. Message: ${message || 'None'}`,
-        email: '',
+  try{
+    await fetch(N8N_WEBHOOK_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      mode:'no-cors',
+      body:JSON.stringify({
+        name, phone,
+        source:'Website',
+        notes:`Business: ${business||'Not specified'}. Message: ${message||'None'}`,
+        email:'',
       })
     });
-  } catch (err) {
-    // no-cors mode এ error আসলেও actually submit হয়ে যায়
+  }catch(err){
     console.log('Submitted (no-cors mode)');
   }
 
-  // Always show success (no-cors এ response পাওয়া যায় না)
   document.getElementById('success-name').textContent = name;
   document.getElementById('form-section').style.display = 'none';
   document.getElementById('success-section').style.display = 'block';
