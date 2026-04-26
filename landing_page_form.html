@@ -681,10 +681,13 @@ document.getElementById('lead-form').addEventListener('submit', async function(e
       headers:{'Content-Type':'application/json'},
       mode:'no-cors',
       body:JSON.stringify({
-        name, phone,
-        source:'Website',
-        notes:`Business: ${business||'Not specified'}. Message: ${message||'None'}`,
-        email:'',
+        full_name: name,
+        phone: phone,
+        source: 'AutoFlow Website',
+        message: `Business: ${business||'Not specified'}. ${message||''}`,
+        email: '',
+        budget: '',
+        service: business || '',
       })
     });
   }catch(err){
