@@ -33,8 +33,8 @@ export default function Login() {
   const [runtimeHash, setRuntimeHash] = useState(null)
 
   useEffect(() => {
-    if (sessionStorage.getItem('af_logged_in') === '1') router.replace('/')
-    const saved = sessionStorage.getItem('af_pw_hash')
+    if (localStorage.getItem('af_logged_in') === '1') router.replace('/')
+    const saved = localStorage.getItem('af_pw_hash')
     if (saved) setRuntimeHash(saved)
   }, [])
 
@@ -44,7 +44,7 @@ export default function Login() {
     const [he, hp] = await Promise.all([sha256(email.trim()), sha256(pass)])
     const activeHash = runtimeHash || H_PASS
     if (he === H_EMAIL && hp === activeHash) {
-      sessionStorage.setItem('af_logged_in', '1')
+      localStorage.setItem('af_logged_in', '1')
       router.replace('/')
     } else {
       setError('Invalid email or password.')
@@ -70,7 +70,7 @@ export default function Login() {
     setPwErr('')
     if (newPw.length < 8 || newPw !== confirmPw) { setPwErr("Passwords don't match or too short (min 8)."); return }
     const h = await sha256(newPw)
-    sessionStorage.setItem('af_pw_hash', h)
+    localStorage.setItem('af_pw_hash', h)
     setRuntimeHash(h)
     setResetDone(true)
     setTimeout(() => { setMode('login'); setResetDone(false); setNewPw(''); setConfirmPw(''); setSqAns('') }, 2000)

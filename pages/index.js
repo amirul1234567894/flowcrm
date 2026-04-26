@@ -49,7 +49,7 @@ export default function CRM() {
 
   // ── auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (sessionStorage.getItem('af_logged_in') !== '1') {
+    if (localStorage.getItem('af_logged_in') !== '1') {
       router.replace('/login')
     } else {
       setAuthed(true)
