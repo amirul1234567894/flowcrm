@@ -59,6 +59,9 @@ export default function CRM() {
   useEffect(() => {
     if (!authed) return
     fetchLeads()
+    // Auto-refresh every 15 seconds (realtime fallback)
+    const interval = setInterval(() => fetchLeads(), 15000)
+    return () => clearInterval(interval)
     const ch = supabase.channel('rt-leads')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{
         setLeads(prev=>[p.new,...prev])
@@ -94,7 +97,7 @@ export default function CRM() {
     if (!form.name.trim()) return notify('Name required!','err')
     if (!form.phone.trim()) return notify('Phone required!','err')
     const res = await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,last_contact:today()})})
-    if (res.ok) { setShowAdd(false); setForm({name:'',phone:'',source:'Website',status:'New Lead',notes:''}); notify('✅ Lead added!') }
+    if (res.ok) { setShowAdd(false); setForm({name:'',phone:'',source:'Website',status:'New Lead',notes:''}); notify('✅ Lead added!'); fetchLeads() }
     else notify('Error adding lead','err')
   }
 
