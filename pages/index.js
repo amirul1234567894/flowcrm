@@ -151,6 +151,7 @@ export default function CRM() {
     <Head>
       <title>FlowCRM v3</title>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+      <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233b82f6'/><text y='.9em' font-size='80' x='10'>⚡</text></svg>"/>
     </Head>
     <div className="app">
 
@@ -163,13 +164,13 @@ export default function CRM() {
           <div className="logo-sub">v3 · AUTOMATION</div>
         </div>
         {[
-          ['dashboard','Dashboard','⊞',null],
-          ['leads','All Leads','≡',leads.length],
-          ['followup','Follow-ups','⏰',fuAll.length||null],
-          ['kanban','Kanban','▦',null],
-          ['inbox','Inbox','✉',null],
-          ['analytics','Analytics','↗',null],
-          ['settings','n8n & Setup','⚙',null],
+          ['dashboard','Dashboard','📊',null],
+          ['leads','All Leads','👥',leads.length],
+          ['followup','Follow-ups','🔔',fuAll.length||null],
+          ['kanban','Kanban','🗂️',null],
+          ['inbox','Inbox','💬',null],
+          ['analytics','Analytics','📈',null],
+          ['settings','n8n & Setup','⚙️',null],
         ].map(([id,label,icon,badge])=>(
           <div key={id} className={`ni${view===id?' a':''}`} onClick={()=>{setView(id);setSideOpen(false)}}>
             <span className="nico">{icon}</span>{label}
