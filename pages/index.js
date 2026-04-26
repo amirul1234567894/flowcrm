@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { supabase } from '../lib/supabase'
 
@@ -27,6 +28,9 @@ export default function CRM() {
   const [chatInput, setChatInput] = useState('')
   const [fuTab, setFuTab]       = useState('all')
   const [form, setForm]         = useState({name:'',phone:'',source:'Website',status:'New Lead',notes:''})
+  const router = useRouter()
+  const [authed, setAuthed] = useState(false)
+  const [sideOpen, setSideOpen] = useState(false)
   const msgsEnd = useRef(null)
   const ntTimer = useRef(null)
   const webhookUrl = typeof window!=='undefined' ? `${window.location.origin}/api/webhook/lead` : ''
@@ -43,7 +47,17 @@ export default function CRM() {
     if (data) setMsgs(data)
   }, [])
 
+  // ── auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (sessionStorage.getItem('af_logged_in') !== '1') {
+      router.replace('/login')
+    } else {
+      setAuthed(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!authed) return
     fetchLeads()
     const ch = supabase.channel('rt-leads')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{
@@ -134,6 +148,8 @@ export default function CRM() {
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
+  if (!authed) return null
+
   return (<>
     <Head>
       <title>FlowCRM v3</title>
@@ -141,8 +157,10 @@ export default function CRM() {
     </Head>
     <div className="app">
 
+      {/* MOBILE OVERLAY */}
+      {sideOpen&&<div className="mob-overlay" onClick={()=>setSideOpen(false)}/>}
       {/* SIDEBAR */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sideOpen?' open':''}`}>
         <div className="logo-wrap">
           <div className="logo">Flow<span>CRM</span></div>
           <div className="logo-sub">v3 · AUTOMATION</div>
@@ -156,7 +174,7 @@ export default function CRM() {
           ['analytics','Analytics','↗',null],
           ['settings','n8n & Setup','⚙',null],
         ].map(([id,label,icon,badge])=>(
-          <div key={id} className={`ni${view===id?' a':''}`} onClick={()=>setView(id)}>
+          <div key={id} className={`ni${view===id?' a':''}`} onClick={()=>{setView(id);setSideOpen(false)}}>
             <span className="nico">{icon}</span>{label}
             {badge ? <span className={`nbadge${id==='followup'?' nbadge-warn':''}`}>{badge}</span> : null}
           </div>
@@ -172,6 +190,7 @@ export default function CRM() {
       {/* MAIN */}
       <main className="main">
         <header className="topbar">
+          <button className="ham" onClick={()=>setSideOpen(o=>!o)}>☰</button>
           <div className="topbar-title">
             {view==='dashboard'?'Dashboard':view==='leads'?'All Leads':view==='followup'?`Follow-ups ${fuAll.length>0?`(${fuAll.length} pending)`:''}`:view==='kanban'?'Kanban':view==='inbox'?'Inbox':view==='analytics'?'Analytics':'n8n & Setup'}
           </div>
@@ -785,6 +804,55 @@ alter table followup_logs disable row level security;`}</pre>
       ::-webkit-scrollbar{width:4px;height:4px}
       ::-webkit-scrollbar-track{background:transparent}
       ::-webkit-scrollbar-thumb{background:var(--br2);border-radius:2px}
+      /* ── HAMBURGER ── */
+      .ham{display:none;background:none;border:1px solid var(--br);border-radius:7px;color:var(--text);font-size:18px;padding:5px 10px;cursor:pointer;flex-shrink:0}
+      /* ── MOBILE OVERLAY ── */
+      .mob-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:49;backdrop-filter:blur(2px)}
+      /* ── RESPONSIVE ── */
+      @media(max-width:768px){
+        html,body{overflow:auto}
+        .app{flex-direction:column;height:auto;min-height:100vh}
+        .sidebar{
+          position:fixed;top:0;left:0;bottom:0;z-index:50;
+          transform:translateX(-100%);transition:transform 0.25s ease;
+          width:240px;min-width:240px;
+        }
+        .sidebar.open{transform:translateX(0)}
+        .ham{display:flex}
+        .main{flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:auto}
+        .topbar{height:52px;min-height:52px;padding:0 14px;gap:10px}
+        .topbar-title{font-size:14px}
+        .sbox{width:140px}
+        .content{padding:14px 12px;overflow-y:visible}
+        /* STATS GRID */
+        .sgrid{grid-template-columns:repeat(2,1fr)!important;gap:10px}
+        /* TWO COL → ONE COL */
+        .twocol{grid-template-columns:1fr!important}
+        /* KANBAN SCROLL */
+        .kanban{grid-template-columns:repeat(6,220px)!important;overflow-x:auto;padding-bottom:8px}
+        /* INBOX */
+        .inbox{grid-template-columns:1fr!important;height:auto}
+        .ilist{max-height:260px;border-right:none;border-bottom:1px solid var(--br)}
+        .carea{min-height:400px}
+        /* MODAL */
+        .modal{width:calc(100vw - 24px)!important;max-height:90vh}
+        .fr2{grid-template-columns:1fr!important}
+        /* TABLE scroll */
+        .tbl{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        /* FOLLOW-UP */
+        .fu-card{flex-direction:column!important;align-items:flex-start!important;gap:10px}
+        .fu-right{flex-direction:row!important;flex-wrap:wrap;align-items:center!important;width:100%}
+        /* BUTTONS */
+        .card-hdr{flex-direction:column;align-items:flex-start!important}
+        .card-hdr>div{flex-wrap:wrap}
+        .ftabs{flex-wrap:wrap}
+      }
+      @media(max-width:480px){
+        .sgrid{grid-template-columns:1fr!important}
+        .topbar-title{display:none}
+        .sbox{width:120px}
+      }
+
     `}</style>
   </>)
 }
