@@ -4,8 +4,8 @@ import Head from 'next/head'
 
 // SHA-256 hashes — plain credentials NOT stored here
 // Email: admin@amirul123  |  Password: Amirul@1234
-const H_EMAIL = 'f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b'
-const H_PASS  = 'b3b738b8a07fed22c71b6e3e8b02d99bd25a1bb8b069ee93aeb6e8c9d91f6524'
+const H_EMAIL = '28be2fde29826787a696fa2e525a5081ed7132a33b9fbdf1cfef6e5a9f274553'
+const H_PASS  = '2adf4fd945af63d3731799e4ae9bf9928752e2d98733c967b48af3c8a2c2e2ed'
 
 // Secret answer: autoflow
 const H_SECRET = '2c04410d922c25b5fcc6ab037a86b0d7b3d56d1990a11523e6adf7c083f4ddb9'
