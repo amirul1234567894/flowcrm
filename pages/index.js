@@ -37,14 +37,24 @@ export default function CRM() {
 
   // ── fetch ─────────────────────────────────────────────────────────────────
   const fetchLeads = useCallback(async () => {
-    const {data} = await supabase.from('leads').select('*').order('created_at',{ascending:false})
-    if (data) setLeads(data)
+    try {
+      const res = await fetch('/api/leads')
+      if (res.ok) {
+        const data = await res.json()
+        setLeads(data)
+      }
+    } catch(e) { console.error('fetchLeads error:', e) }
     setLoading(false)
   }, [])
 
   const fetchMsgs = useCallback(async (lid) => {
-    const {data} = await supabase.from('messages').select('*').eq('lead_id',lid).order('created_at',{ascending:true})
-    if (data) setMsgs(data)
+    try {
+      const res = await fetch(`/api/messages?lead_id=${lid}`)
+      if (res.ok) {
+        const data = await res.json()
+        setMsgs(data)
+      }
+    } catch(e) { console.error('fetchMsgs error:', e) }
   }, [])
 
   // ── auth guard ────────────────────────────────────────────────────────────
@@ -62,24 +72,8 @@ export default function CRM() {
     // Auto-refresh every 15 seconds (realtime fallback)
     const interval = setInterval(() => fetchLeads(), 15000)
     return () => clearInterval(interval)
-    const ch = supabase.channel('rt-leads')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'leads'},p=>{
-        setLeads(prev=>[p.new,...prev])
-        notify(`🔔 New lead: ${p.new.name} via ${p.new.source}`)
-      })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'leads'},p=>{
-        setLeads(prev=>prev.map(l=>l.id===p.new.id?p.new:l))
-      })
-      .on('postgres_changes',{event:'DELETE',schema:'public',table:'leads'},p=>{
-        setLeads(prev=>prev.filter(l=>l.id!==p.old.id))
-      })
-      .subscribe()
-    const ch2 = supabase.channel('rt-msgs')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},p=>{
-        setMsgs(prev=>[...prev,p.new])
-      })
-      .subscribe()
-    return ()=>{supabase.removeChannel(ch);supabase.removeChannel(ch2)}
+    // polling fallback - realtime replaced with API
+    return () => {}
   },[fetchLeads])
 
   useEffect(()=>{if(activeChat)fetchMsgs(activeChat.id)},[activeChat,fetchMsgs])
