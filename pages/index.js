@@ -63,18 +63,17 @@ export default function CRM() {
       router.replace('/login')
     } else {
       setAuthed(true)
+      // Fetch immediately on auth confirm
+      fetchLeads()
     }
   }, [])
 
   useEffect(() => {
     if (!authed) return
     fetchLeads()
-    // Auto-refresh every 15 seconds (realtime fallback)
     const interval = setInterval(() => fetchLeads(), 15000)
     return () => clearInterval(interval)
-    // polling fallback - realtime replaced with API
-    return () => {}
-  },[fetchLeads])
+  },[authed, fetchLeads])
 
   useEffect(()=>{if(activeChat)fetchMsgs(activeChat.id)},[activeChat,fetchMsgs])
   useEffect(()=>{msgsEnd.current?.scrollIntoView({behavior:'smooth'})},[msgs])
