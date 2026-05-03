@@ -12,6 +12,7 @@ const SRCC = {Facebook:'sf',Instagram:'si',WhatsApp:'sw',Website:'swb',Telegram:
 const SRCCOL = ['#3b82f6','#ec4899','#22c55e','#f59e0b','#06b6d4','#f97316','#a855f7']
 const today = () => new Date().toISOString().slice(0,10)
 const daysSince = d => Math.floor((Date.now()-new Date(d))/(86400000))
+const scoreLabel = s => s>=80?{t:'🔥 Hot',c:'#ef4444'}:s>=60?{t:'🌤️ Warm',c:'#f59e0b'}:s>=40?{t:'Medium',c:'#3b82f6'}:{t:'❄️ Cold',c:'#6b7280'}
 
 export default function CRM() {
   const [view, setView]         = useState('dashboard')
@@ -20,6 +21,8 @@ export default function CRM() {
   const [loading, setLoading]   = useState(true)
   const [filterSt, setFilterSt] = useState('All')
   const [filterSrc, setFilterSrc] = useState('All')
+  const [filterNiche, setFilterNiche] = useState('All')
+  const [filterScore, setFilterScore] = useState(0)
   const [searchQ, setSearchQ]   = useState('')
   const [activeChat, setActiveChat] = useState(null)
   const [editLead, setEditLead] = useState(null)
@@ -27,7 +30,7 @@ export default function CRM() {
   const [notif, setNotif]       = useState(null)
   const [chatInput, setChatInput] = useState('')
   const [fuTab, setFuTab]       = useState('all')
-  const [form, setForm]         = useState({name:'',phone:'',source:'Website',status:'New Lead',notes:''})
+  const [form, setForm]         = useState({name:'',phone:'',email:'',source:'Website',status:'New Lead',niche:'',notes:'',tags:''})
   const router = useRouter()
   const [authed, setAuthed] = useState(false)
   const [sideOpen, setSideOpen] = useState(false)
@@ -88,9 +91,9 @@ export default function CRM() {
   // ── CRUD ──────────────────────────────────────────────────────────────────
   const addLead = async () => {
     if (!form.name.trim()) return notify('Name required!','err')
-    if (!form.phone.trim()) return notify('Phone required!','err')
+    if (!form.phone.trim() && !form.email.trim()) return notify('Phone or Email required!','err')
     const res = await fetch('/api/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...form,last_contact:today()})})
-    if (res.ok) { setShowAdd(false); setForm({name:'',phone:'',source:'Website',status:'New Lead',notes:''}); notify('✅ Lead added!'); fetchLeads() }
+    if (res.ok) { setShowAdd(false); setForm({name:'',phone:'',email:'',source:'Website',status:'New Lead',niche:'',notes:'',tags:''}); notify('✅ Lead added!'); fetchLeads() }
     else notify('Error adding lead','err')
   }
 
@@ -123,8 +126,10 @@ export default function CRM() {
   const filtered = leads.filter(l=>{
     const ms = filterSt==='All'||l.status===filterSt
     const mr = filterSrc==='All'||l.source===filterSrc
-    const mq = !searchQ||l.name?.toLowerCase().includes(searchQ)||l.phone?.includes(searchQ)||(l.notes||'').toLowerCase().includes(searchQ)
-    return ms&&mr&&mq
+    const mq = !searchQ||l.name?.toLowerCase().includes(searchQ)||l.phone?.includes(searchQ)||(l.notes||'').toLowerCase().includes(searchQ)||(l.niche||'').toLowerCase().includes(searchQ)
+    const mn = filterNiche==='All'||l.niche===filterNiche
+    const msc = (l.score||0)>=filterScore
+    return ms&&mr&&mq&&mn&&msc
   })
 
   // Follow-up buckets
@@ -141,6 +146,8 @@ export default function CRM() {
     demo: leads.filter(l=>l.status==='Demo Booked').length,
     interested: leads.filter(l=>l.status==='Interested').length,
     fuPending: fuAll.length,
+    hot: leads.filter(l=>l.score>=80).length,
+    warm: leads.filter(l=>l.score>=60&&l.score<80).length,
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -211,6 +218,10 @@ export default function CRM() {
               <SC2 c="green" icon="✅" label="Closed Won" num={stats.won} sub={`${stats.total?Math.round(stats.won/stats.total*100):0}% conv`}/>
               <SC2 c="amber" icon="📅" label="Demo Booked" num={stats.demo}/>
               <SC2 c="red" icon="⏰" label="Follow-ups Due" num={stats.fuPending} sub="need action"/>
+            </div>
+            <div className="sgrid" style={{gridTemplateColumns:'repeat(2,1fr)',marginBottom:16}}>
+              <SC2 c="red" icon="🔥" label="Hot Leads" num={stats.hot} sub="score ≥ 80"/>
+              <SC2 c="amber" icon="🌤️" label="Warm Leads" num={stats.warm} sub="score 60–79"/>
             </div>
             <div className="twocol">
               <div className="card">
@@ -322,6 +333,16 @@ export default function CRM() {
                     <option value="All">All Sources</option>
                     {SOURCES.map(s=><option key={s}>{s}</option>)}
                   </select>
+                  <select className="mini-select" value={filterNiche} onChange={e=>setFilterNiche(e.target.value)}>
+                    <option value="All">All Niches</option>
+                    {[...new Set(leads.map(l=>l.niche).filter(Boolean))].map(n=><option key={n}>{n}</option>)}
+                  </select>
+                  <select className="mini-select" value={filterScore} onChange={e=>setFilterScore(Number(e.target.value))}>
+                    <option value={0}>All Scores</option>
+                    <option value={80}>🔥 Hot (80+)</option>
+                    <option value={60}>🌤️ Warm (60+)</option>
+                    <option value={40}>Medium (40+)</option>
+                  </select>
                   <div className="ftabs">
                     {['All',...STATUSES].map(s=>(
                       <button key={s} className={`ftab${filterSt===s?' fa':''}`} onClick={()=>setFilterSt(s)}>
@@ -332,13 +353,15 @@ export default function CRM() {
                 </div>
               </div>
               <table className="tbl">
-                <thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Status</th><th>FU</th><th>Last Contact</th><th>Notes</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Phone</th><th>Source</th><th>Niche</th><th>Score</th><th>Status</th><th>FU</th><th>Tags</th><th></th></tr></thead>
                 <tbody>
                   {filtered.map(l=>(
                     <tr key={l.id} onClick={()=>setEditLead(l)} style={{cursor:'pointer'}}>
                       <td style={{fontWeight:600}}>{l.name}</td>
                       <td className="mono sm">{l.phone}</td>
                       <td><SB s={l.source}/></td>
+                      <td className="mono sm grey">{l.niche||'—'}</td>
+                      <td><ScorePill score={l.score||0}/></td>
                       <td><span className={`badge ${SC[l.status]}`}>{l.status}</span></td>
                       <td>
                         <div style={{display:'flex',gap:3}}>
@@ -347,8 +370,7 @@ export default function CRM() {
                           <span className="fu-dot" style={{background:l.fu3_sent?'var(--green)':'var(--br2)'}}>7</span>
                         </div>
                       </td>
-                      <td className="mono sm grey">{l.last_contact}</td>
-                      <td className="grey" style={{maxWidth:130,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.notes||'—'}</td>
+                      <td><TagList tags={l.tags}/></td>
                       <td><button className="btn sm" onClick={e=>{e.stopPropagation();setEditLead(l)}}>Edit</button></td>
                     </tr>
                   ))}
@@ -453,6 +475,10 @@ export default function CRM() {
               <SC2 c="green" label="Conversion" num={`${stats.total?Math.round(stats.won/stats.total*100):0}%`}/>
               <SC2 c="amber" label="Follow-ups Due" num={fuAll.length}/>
               <SC2 c="purple" label="Sources Active" num={SOURCES.filter(s=>leads.some(l=>l.source===s)).length}/>
+            </div>
+            <div className="sgrid" style={{gridTemplateColumns:'repeat(2,1fr)',marginBottom:16}}>
+              <SC2 c="red" icon="🔥" label="Hot Leads" num={stats.hot} sub="score ≥ 80"/>
+              <SC2 c="amber" icon="🌤️" label="Warm Leads" num={stats.warm} sub="score 60–79"/>
             </div>
             <div className="twocol">
               <div className="card">
@@ -587,20 +613,34 @@ alter table followup_logs disable row level security;`}</pre>
     {/* ADD MODAL */}
     {showAdd&&<Modal title="Add New Lead" onClose={()=>setShowAdd(false)}>
       <div className="fr2"><Field label="Name *"><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Rahul Sharma"/></Field>
-      <Field label="Phone *"><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="+91 9876543210"/></Field></div>
+      <Field label="Phone *"><input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="+8801711234567"/></Field></div>
+      <div className="fr2">
+        <Field label="Email"><input value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="info@business.com" type="email"/></Field>
+        <Field label="Niche"><input value={form.niche} onChange={e=>setForm({...form,niche:e.target.value})} placeholder="gym, salon, clinic…"/></Field>
+      </div>
       <div className="fr2">
         <Field label="Source"><select value={form.source} onChange={e=>setForm({...form,source:e.target.value})}>{SOURCES.map(s=><option key={s}>{s}</option>)}</select></Field>
         <Field label="Status"><select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></Field>
       </div>
+      <Field label="Tags (comma separated)"><input value={form.tags} onChange={e=>setForm({...form,tags:e.target.value})} placeholder="dhaka, hot-area, vip"/></Field>
       <Field label="Notes"><textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Lead details…" rows={3}/></Field>
       <div className="mfoot"><button className="btn" onClick={()=>setShowAdd(false)}>Cancel</button><button className="btn bp" onClick={addLead}>Add Lead</button></div>
     </Modal>}
 
     {/* EDIT MODAL */}
     {editLead&&<Modal title={editLead.name} onClose={()=>setEditLead(null)}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14,padding:'10px 14px',background:'var(--bg3)',borderRadius:10,border:'1px solid var(--br)'}}>
+        <ScorePill score={editLead.score||0} large/>
+        {editLead.niche&&<span className="tag" style={{fontSize:12}}>🏷️ {editLead.niche}</span>}
+        <TagList tags={editLead.tags}/>
+      </div>
       <div className="fr2">
         <Field label="Name"><input defaultValue={editLead.name} id="en"/></Field>
         <Field label="Phone"><input defaultValue={editLead.phone} id="ep"/></Field>
+      </div>
+      <div className="fr2">
+        <Field label="Email"><input defaultValue={editLead.email||''} id="eem" type="email" placeholder="email@example.com"/></Field>
+        <Field label="Niche"><input defaultValue={editLead.niche||''} id="enic" placeholder="gym, salon…"/></Field>
       </div>
       <div className="fr2">
         <Field label="Source"><select defaultValue={editLead.source} id="esrc">{SOURCES.map(s=><option key={s}>{s}</option>)}</select></Field>
@@ -608,15 +648,16 @@ alter table followup_logs disable row level security;`}</pre>
       </div>
       <Field label="Notes"><textarea defaultValue={editLead.notes} id="en2" rows={3}/></Field>
       <div className="tag-row">
-        <span className="tag">Created: {editLead.created_at?.slice(0,10)}</span>
-        <span className="tag" style={{color:editLead.fu1_sent?'var(--green)':'var(--t3)'}}>FU Day1: {editLead.fu1_sent?'✓':'Pending'}</span>
-        <span className="tag" style={{color:editLead.fu2_sent?'var(--green)':'var(--t3)'}}>FU Day3: {editLead.fu2_sent?'✓':'Pending'}</span>
-        <span className="tag" style={{color:editLead.fu3_sent?'var(--green)':'var(--t3)'}}>FU Day7: {editLead.fu3_sent?'✓':'Pending'}</span>
+        <span className="tag">📅 {editLead.created_at?.slice(0,10)}</span>
+        {editLead.email&&<span className="tag">✉️ {editLead.email}</span>}
+        <span className="tag" style={{color:editLead.fu1_sent?'var(--green)':'var(--t3)'}}>FU1: {editLead.fu1_sent?'✓':'⏳'}</span>
+        <span className="tag" style={{color:editLead.fu2_sent?'var(--green)':'var(--t3)'}}>FU3: {editLead.fu2_sent?'✓':'⏳'}</span>
+        <span className="tag" style={{color:editLead.fu3_sent?'var(--green)':'var(--t3)'}}>FU7: {editLead.fu3_sent?'✓':'⏳'}</span>
       </div>
       <div className="mfoot">
         <button className="btn br" onClick={()=>deleteLead(editLead.id)}>Delete</button>
         <button className="btn" onClick={()=>setEditLead(null)}>Cancel</button>
-        <button className="btn bg" onClick={()=>updateLead(editLead.id,{name:document.getElementById('en').value,phone:document.getElementById('ep').value,source:document.getElementById('esrc').value,status:document.getElementById('est').value,notes:document.getElementById('en2').value})}>Save</button>
+        <button className="btn bg" onClick={()=>updateLead(editLead.id,{name:document.getElementById('en').value,phone:document.getElementById('ep').value,email:document.getElementById('eem').value||null,niche:document.getElementById('enic').value||null,source:document.getElementById('esrc').value,status:document.getElementById('est').value,notes:document.getElementById('en2').value})}>Save</button>
       </div>
     </Modal>}
 
@@ -879,6 +920,16 @@ function BChart({items,lw=100}){
 }
 function Field({label,children}){return <div className="fg"><label>{label}</label>{children}</div>}
 function Emp({icon,text}){return <div style={{textAlign:'center',padding:'36px 20px',color:'var(--t3)'}}><div style={{fontSize:28,marginBottom:8,opacity:0.5}}>{icon}</div><div style={{fontSize:13}}>{text}</div></div>}
+function ScorePill({score,large}){
+  const sl=scoreLabel(score||0)
+  return <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:large?'4px 10px':'3px 7px',borderRadius:6,background:`${sl.c}18`,border:`1px solid ${sl.c}40`,color:sl.c,fontSize:large?13:11,fontFamily:'var(--mono)',fontWeight:600}}>{sl.t} <span style={{opacity:0.7}}>{score||0}</span></span>
+}
+function TagList({tags}){
+  if(!tags||tags.length===0) return null
+  return <div style={{display:'flex',gap:3,flexWrap:'wrap'}}>{tags.slice(0,3).map((t,i)=>(
+    <span key={i} style={{padding:'2px 6px',borderRadius:4,background:'var(--bg4)',border:'1px solid var(--br2)',color:'var(--t2)',fontSize:10,fontFamily:'var(--mono)'}}>{t}</span>
+  ))}{tags.length>3&&<span style={{fontSize:10,color:'var(--t3)',fontFamily:'var(--mono)'}}>+{tags.length-3}</span>}</div>
+}
 function Modal({title,onClose,children}){return(
   <div className="moverlay" onClick={e=>{if(e.target.classList.contains('moverlay'))onClose()}}>
     <div className="modal">
