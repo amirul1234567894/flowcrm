@@ -41,11 +41,20 @@ export default function CRM() {
   // ── fetch ─────────────────────────────────────────────────────────────────
   const fetchLeads = useCallback(async () => {
     try {
-      const res = await fetch('/api/leads')
-      if (res.ok) {
+      // Fetch all leads in batches to bypass Supabase 1000 row limit
+      let allLeads = []
+      let page = 1
+      const pageSize = 1000
+      while (true) {
+        const res = await fetch(`/api/leads?page=${page}&limit=${pageSize}`)
+        if (!res.ok) break
         const data = await res.json()
-        if (Array.isArray(data)) setLeads(data)
+        if (!Array.isArray(data) || data.length === 0) break
+        allLeads = [...allLeads, ...data]
+        if (data.length < pageSize) break  // last page
+        page++
       }
+      if (allLeads.length > 0) setLeads(allLeads)
     } catch(e) { console.error('fetchLeads error:', e) }
     setLoading(false)
   }, [])
