@@ -9,22 +9,52 @@ export default async function handler(req, res) {
 
   // ── GET: List leads ──────────────────────────────────────
   if (req.method === 'GET') {
-    const { tag, niche, min_score, source, status } = req.query
+    const { tag, niche, min_score, source, status, page, limit } = req.query
+
+    const pageSize = parseInt(limit) || 2000
+    const pageNum  = parseInt(page)  || 1
+    const from     = (pageNum - 1) * pageSize
+    const to       = from + pageSize - 1
 
     let q = supabase
       .from('leads')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
+      .range(from, to)
 
     // Optional filters
     if (status)    q = q.eq('status', status)
     if (source)    q = q.eq('source', source)
     if (niche)     q = q.ilike('niche', `%${niche}%`)
     if (min_score) q = q.gte('score', parseInt(min_score))
-    if (tag)       q = q.contains('tags', [tag.toLowerCase()])  // array contains
+    if (tag)       q = q.contains('tags', [tag.toLowerCase()])
 
-    const { data, error } = await q
+    const { data, error, count } = await q
     if (error) return res.status(500).json({ error: error.message })
+
+    // If no pagination param — fetch ALL pages automatically
+    if (!page && count > pageSize) {
+      let allData = [...data]
+      let nextFrom = pageSize
+      while (nextFrom < count) {
+        let q2 = supabase
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(nextFrom, nextFrom + pageSize - 1)
+        if (status)    q2 = q2.eq('status', status)
+        if (source)    q2 = q2.eq('source', source)
+        if (niche)     q2 = q2.ilike('niche', `%${niche}%`)
+        if (min_score) q2 = q2.gte('score', parseInt(min_score))
+        if (tag)       q2 = q2.contains('tags', [tag.toLowerCase()])
+        const { data: moreData } = await q2
+        if (!moreData?.length) break
+        allData = [...allData, ...moreData]
+        nextFrom += pageSize
+      }
+      return res.status(200).json(allData)
+    }
+
     return res.status(200).json(data)
   }
 
