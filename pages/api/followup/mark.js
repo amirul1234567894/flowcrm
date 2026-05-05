@@ -1,5 +1,5 @@
-// pages/api/followup/mark.js
-// n8n WhatsApp message পাঠানোর পর এই endpoint call করে mark করে
+// pages/api/followup/mark.js  (v2 — email channel)
+// n8n email পাঠানোর পর এই endpoint call করে mark করে
 
 import { getServiceClient } from '../../../lib/supabase'
 
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const { lead_id, fu_day } = req.body // fu_day = 1, 3, or 7
+  const { lead_id, fu_day, channel = 'email' } = req.body  // channel default → 'email'
 
   if (!lead_id || !fu_day) return res.status(400).json({ error: 'lead_id and fu_day required' })
 
@@ -31,20 +31,20 @@ export default async function handler(req, res) {
     lead_id,
     fu_day: parseInt(fu_day),
     status: 'sent',
-    channel: 'whatsapp',
+    channel,           // 'email' now
   }])
 
-  // Save message log
-  const msgMap = {
-    1: "Hey! Just checking in 👋 Did you get a chance to think about automation for your business?",
-    3: "Hi! Quick follow-up 😊 We helped a client save 3 hours/day last week. Want to see how? Reply 'DEMO'",
-    7: "Last message from me 🙏 If you're ever ready to automate your business, we're here. Reply anytime!",
+  // Email subject log (matches what was actually sent)
+  const subjectMap = {
+    1: "Did You Get a Chance to Think It Over? — AutoFlow",
+    3: "Two Versions of Your Business. Which Is Yours? — AutoFlow",
+    7: "My Last Message to You — AutoFlow",
   }
   await supabase.from('messages').insert([{
     lead_id,
     direction: 'out',
-    channel: 'whatsapp',
-    text: msgMap[parseInt(fu_day)] || 'Follow-up sent',
+    channel: 'email',
+    text: subjectMap[parseInt(fu_day)] || 'Follow-up email sent',
   }])
 
   return res.status(200).json({ success: true })
