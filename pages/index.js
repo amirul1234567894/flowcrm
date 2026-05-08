@@ -39,24 +39,33 @@ export default function CRM() {
   const webhookUrl = typeof window!=='undefined' ? `${window.location.origin}/api/webhook/lead` : ''
 
   // ── fetch ─────────────────────────────────────────────────────────────────
+  // Performance fix: load first 500 instantly, background-load the rest
   const fetchLeads = useCallback(async () => {
     try {
-      // Fetch all leads in batches to bypass Supabase 1000 row limit
-      let allLeads = []
-      let page = 1
-      const pageSize = 1000
-      while (true) {
-        const res = await fetch(`/api/leads?page=${page}&limit=${pageSize}`)
-        if (!res.ok) break
-        const data = await res.json()
-        if (!Array.isArray(data) || data.length === 0) break
-        allLeads = [...allLeads, ...data]
-        if (data.length < pageSize) break  // last page
-        page++
+      const res = await fetch('/api/leads?page=1&limit=500')
+      if (!res.ok) { setLoading(false); return }
+      const result = await res.json()
+      // New API returns { data, count, page, pageSize }
+      const firstBatch = Array.isArray(result) ? result : (result.data || [])
+      if (firstBatch.length > 0) setLeads(firstBatch)
+      setLoading(false)
+      // Silently load remaining pages in background
+      const totalCount = result.count || 0
+      const pageSize = result.pageSize || 500
+      if (totalCount > pageSize) {
+        const totalPages = Math.ceil(totalCount / pageSize)
+        let allLeads = [...firstBatch]
+        for (let p = 2; p <= totalPages; p++) {
+          const r2 = await fetch(`/api/leads?page=${p}&limit=${pageSize}`)
+          if (!r2.ok) break
+          const r2result = await r2.json()
+          const batch = Array.isArray(r2result) ? r2result : (r2result.data || [])
+          if (!batch.length) break
+          allLeads = [...allLeads, ...batch]
+          setLeads([...allLeads]) // update progressively
+        }
       }
-      if (allLeads.length > 0) setLeads(allLeads)
-    } catch(e) { console.error('fetchLeads error:', e) }
-    setLoading(false)
+    } catch(e) { console.error('fetchLeads error:', e); setLoading(false) }
   }, [])
 
   const fetchMsgs = useCallback(async (lid) => {
@@ -83,7 +92,7 @@ export default function CRM() {
   useEffect(() => {
     if (!authed) return
     fetchLeads()
-    const interval = setInterval(() => fetchLeads(), 15000)
+    const interval = setInterval(() => fetchLeads(), 60000) // changed from 15s→60s for performance
     return () => clearInterval(interval)
   },[authed, fetchLeads])
 

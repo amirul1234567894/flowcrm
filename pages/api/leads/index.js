@@ -1,24 +1,31 @@
-// pages/api/leads/index.js  (UPGRADED)
-// GET: fetch all leads (with filter by tag, niche, score)
-// POST: manual add from CRM UI (unchanged UX)
+// pages/api/leads/index.js  (PERFORMANCE OPTIMIZED)
+// GET: fetch leads with pagination (default 200 per page, only needed columns)
+// POST: manual add from CRM UI
 
 import { getServiceClient } from '../../../lib/supabase'
 
+// Only fetch columns actually used in the CRM UI — avoids pulling heavy unused fields
+const LEAD_COLUMNS = 'id,name,phone,email,source,status,niche,notes,tags,score,created_at,last_contact,fu1_sent,fu2_sent,fu3_sent,fu1_sent_at,fu2_sent_at,fu3_sent_at,day1_sent,day3_sent,day7_sent,email_sequence_status,updated_at'
+
 export default async function handler(req, res) {
   const supabase = getServiceClient()
+
+  // Cache headers — allow CDN/browser to cache for 10s (data is fetched every 30s anyway)
+  res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=20')
 
   // ── GET: List leads ──────────────────────────────────────
   if (req.method === 'GET') {
     const { tag, niche, min_score, source, status, page, limit } = req.query
 
-    const pageSize = parseInt(limit) || 2000
-    const pageNum  = parseInt(page)  || 1
+    // Reduced default page size from 2000 → 500 for faster mobile loads
+    const pageSize = Math.min(parseInt(limit) || 500, 1000)
+    const pageNum  = parseInt(page) || 1
     const from     = (pageNum - 1) * pageSize
     const to       = from + pageSize - 1
 
     let q = supabase
       .from('leads')
-      .select('*', { count: 'exact' })
+      .select(LEAD_COLUMNS, { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -32,30 +39,8 @@ export default async function handler(req, res) {
     const { data, error, count } = await q
     if (error) return res.status(500).json({ error: error.message })
 
-    // If no pagination param — fetch ALL pages automatically
-    if (!page && count > pageSize) {
-      let allData = [...data]
-      let nextFrom = pageSize
-      while (nextFrom < count) {
-        let q2 = supabase
-          .from('leads')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .range(nextFrom, nextFrom + pageSize - 1)
-        if (status)    q2 = q2.eq('status', status)
-        if (source)    q2 = q2.eq('source', source)
-        if (niche)     q2 = q2.ilike('niche', `%${niche}%`)
-        if (min_score) q2 = q2.gte('score', parseInt(min_score))
-        if (tag)       q2 = q2.contains('tags', [tag.toLowerCase()])
-        const { data: moreData } = await q2
-        if (!moreData?.length) break
-        allData = [...allData, ...moreData]
-        nextFrom += pageSize
-      }
-      return res.status(200).json(allData)
-    }
-
-    return res.status(200).json(data)
+    // Return data + total count so frontend can paginate properly
+    return res.status(200).json({ data: data || [], count: count || 0, page: pageNum, pageSize })
   }
 
   // ── POST: Add lead manually from UI ─────────────────────
