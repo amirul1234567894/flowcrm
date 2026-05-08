@@ -30,6 +30,12 @@ export default function CRM() {
   const [notif, setNotif]       = useState(null)
   const [chatInput, setChatInput] = useState('')
   const [fuTab, setFuTab]       = useState('all')
+  const [analytics, setAnalytics] = useState(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
+  const [analyticsRange, setAnalyticsRange] = useState('30')
+  const [waSending, setWaSending] = useState({})
+  const [waModal, setWaModal] = useState(null)
+  const [waMsg, setWaMsg] = useState('')
   const [form, setForm]         = useState({name:'',phone:'',email:'',source:'Website',status:'New Lead',niche:'',notes:'',tags:''})
   const router = useRouter()
   const [authed, setAuthed] = useState(false)
@@ -78,6 +84,30 @@ export default function CRM() {
     } catch(e) { console.error('fetchMsgs error:', e) }
   }, [])
 
+  const fetchAnalytics = async (range='30') => {
+    setAnalyticsLoading(true)
+    try {
+      const res = await fetch(`/api/analytics?range=${range}`)
+      if (res.ok) setAnalytics(await res.json())
+    } catch(e) { console.error(e) }
+    setAnalyticsLoading(false)
+  }
+
+  const sendWhatsApp = async (leadId, customMsg='') => {
+    setWaSending(p => ({...p, [leadId]: true}))
+    try {
+      const res = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ lead_id: leadId, message: customMsg || undefined })
+      })
+      const data = await res.json()
+      if (res.ok) { notify('✅ WhatsApp sent!'); setWaModal(null); setWaMsg('') }
+      else notify('WhatsApp error: ' + (data.error||'Unknown'), 'err')
+    } catch(e) { notify('WhatsApp failed','err') }
+    setWaSending(p => ({...p, [leadId]: false}))
+  }
+
   // ── auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (localStorage.getItem('af_logged_in') !== '1') {
@@ -97,6 +127,7 @@ export default function CRM() {
   },[authed, fetchLeads])
 
   useEffect(()=>{if(activeChat)fetchMsgs(activeChat.id)},[activeChat,fetchMsgs])
+  useEffect(()=>{if(view==='analytics')fetchAnalytics(analyticsRange)},[view,analyticsRange])
   useEffect(()=>{msgsEnd.current?.scrollIntoView({behavior:'smooth'})},[msgs])
 
   // ── notify ────────────────────────────────────────────────────────────────
@@ -318,6 +349,7 @@ export default function CRM() {
                           <button className="btn bg sm" onClick={()=>{navigator.clipboard.writeText(msgs_[fuDay]);notify(`Day-${fuDay} message copied! Send on WhatsApp then mark done.`)}}>
                             📋 Copy Msg
                           </button>
+                          {l.phone && <button className="btn sm" style={{background:'#25D366',color:'#fff',border:'none'}} onClick={()=>{setWaModal(l);setWaMsg('')}}>💬 WA</button>}
                           <button className="btn bp sm" onClick={()=>markFU(l.id,fuDay)}>
                             ✓ Mark Done
                           </button>
@@ -488,40 +520,98 @@ export default function CRM() {
 
           {/* ── ANALYTICS ── */}
           {view==='analytics'&&<div className="fi">
-            <div className="sgrid">
-              <SC2 c="blue" label="Total Leads" num={stats.total}/>
-              <SC2 c="green" label="Conversion" num={`${stats.total?Math.round(stats.won/stats.total*100):0}%`}/>
-              <SC2 c="amber" label="Follow-ups Due" num={fuAll.length}/>
-              <SC2 c="purple" label="Sources Active" num={SOURCES.filter(s=>leads.some(l=>l.source===s)).length}/>
+            {/* Range selector */}
+            <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+              <span style={{fontSize:12,color:'var(--t3)',fontFamily:'var(--mono)'}}>RANGE:</span>
+              {[['7','7 Days'],['30','30 Days'],['90','90 Days'],['365','All Year']].map(([v,l])=>(
+                <button key={v} onClick={()=>setAnalyticsRange(v)} className={`btn${analyticsRange===v?' bp':' br'}`} style={{fontSize:12,padding:'5px 12px'}}>{l}</button>
+              ))}
+              {analyticsLoading && <span style={{fontSize:12,color:'var(--t3)'}}>⟳ Loading...</span>}
             </div>
-            <div className="sgrid" style={{gridTemplateColumns:'repeat(2,1fr)',marginBottom:16}}>
-              <SC2 c="red" icon="🔥" label="Hot Leads" num={stats.hot} sub="score ≥ 80"/>
-              <SC2 c="amber" icon="🌤️" label="Warm Leads" num={stats.warm} sub="score 60–79"/>
+            {/* Summary Cards */}
+            <div className="sgrid" style={{marginBottom:16}}>
+              <SC2 c="blue" label="Total Leads" num={analytics?.summary?.total||stats.total}/>
+              <SC2 c="green" label="Conversion Rate" num={`${analytics?.summary?.conversionRate||0}%`}/>
+              <SC2 c="red" icon="🔥" label="Hot Leads" num={analytics?.summary?.hotLeads||stats.hot} sub="score ≥ 75"/>
+              <SC2 c="purple" label="Avg Lead Score" num={`${analytics?.summary?.avgScore||0}/100`}/>
             </div>
-            <div className="twocol">
+            <div className="twocol" style={{marginBottom:14}}>
+              {/* Status Distribution */}
               <div className="card">
                 <div className="ct">Status Distribution</div>
-                <BChart items={STATUSES.map(s=>({label:s,val:leads.filter(l=>l.status===s).length,color:SS[s]}))} lw={120}/>
+                {analytics?.statusDist ? (
+                  <BChart items={STATUSES.map(s=>({label:s,val:analytics.statusDist[s]||0,color:SS[s]}))} lw={120}/>
+                ) : <BChart items={STATUSES.map(s=>({label:s,val:leads.filter(l=>l.status===s).length,color:SS[s]}))} lw={120}/>}
               </div>
+              {/* Source Performance */}
               <div className="card">
-                <div className="ct">Source Performance</div>
-                <BChart items={SOURCES.map((s,i)=>({label:`${SI[s]} ${s}`,val:leads.filter(l=>l.source===s).length,color:SRCCOL[i]}))}/>
+                <div className="ct">Source Performance ({analyticsRange}d)</div>
+                {analytics?.sourceDist ? (
+                  <BChart items={Object.entries(analytics.sourceDist).sort((a,b)=>b[1]-a[1]).slice(0,7).map(([s,v],i)=>({label:`${SI[s]||'📌'} ${s}`,val:v,color:SRCCOL[i%SRCCOL.length]}))}/>
+                ) : <BChart items={SOURCES.map((s,i)=>({label:`${SI[s]} ${s}`,val:leads.filter(l=>l.source===s).length,color:SRCCOL[i]}))}/>}
               </div>
             </div>
-            <div className="card" style={{marginTop:14}}>
-              <div className="ct">Follow-up Status Overview</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
-                {[['Day 1','fu1_sent','#3b82f6'],[' Day 3','fu2_sent','#a855f7'],['Day 7','fu3_sent','#ef4444']].map(([label,key,color])=>{
-                  const sent=leads.filter(l=>l[key]).length
-                  const pending=leads.filter(l=>!l[key]&&!['Closed Won','Not Interested'].includes(l.status)).length
+            {/* Lead Score Heatmap */}
+            <div className="card" style={{marginBottom:14}}>
+              <div className="ct">Lead Score Distribution — AI Powered</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+                {analytics?.scoreRanges ? Object.entries(analytics.scoreRanges).map(([label,count],i)=>{
+                  const colors=['#ef4444','#f59e0b','#3b82f6','#6b7280']
+                  const total=Object.values(analytics.scoreRanges).reduce((s,v)=>s+v,0)
+                  const pct=total>0?Math.round(count/total*100):0
                   return(
-                    <div key={key} style={{background:'var(--bg3)',borderRadius:10,padding:14,border:'1px solid var(--br)'}}>
-                      <div style={{fontSize:11,fontFamily:'var(--mono)',color:'var(--t3)',marginBottom:8}}>{label} Follow-up</div>
-                      <div style={{fontSize:22,fontWeight:700,color,marginBottom:4}}>{sent}</div>
-                      <div style={{fontSize:11,color:'var(--t3)'}}>sent · <span style={{color:'var(--amber)'}}>{pending} pending</span></div>
+                    <div key={label} style={{background:'var(--bg3)',borderRadius:10,padding:14,border:'1px solid var(--br)',textAlign:'center'}}>
+                      <div style={{fontSize:24,fontWeight:800,color:colors[i]}}>{count}</div>
+                      <div style={{fontSize:11,color:'var(--t3)',marginTop:4}}>{label}</div>
+                      <div style={{marginTop:8,background:'var(--br)',borderRadius:99,height:4}}>
+                        <div style={{width:`${pct}%`,background:colors[i],borderRadius:99,height:4,transition:'width 0.5s'}}/>
+                      </div>
+                      <div style={{fontSize:10,color:'var(--t3)',marginTop:4}}>{pct}%</div>
+                    </div>
+                  )
+                }) : [['Hot 🔥',stats.hot,'#ef4444'],['Warm 🌤️',stats.warm,'#f59e0b']].map(([l,n,c])=>(
+                  <div key={l} style={{background:'var(--bg3)',borderRadius:10,padding:14,border:'1px solid var(--br)',textAlign:'center'}}>
+                    <div style={{fontSize:24,fontWeight:800,color:c}}>{n}</div>
+                    <div style={{fontSize:11,color:'var(--t3)',marginTop:4}}>{l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Follow-up Funnel */}
+            <div className="twocol">
+              <div className="card">
+                <div className="ct">Email Sequence Funnel</div>
+                {[
+                  ['Total Leads', analytics?.funnelData?.total||stats.total, '#3b82f6'],
+                  ['Day 1 Sent', analytics?.funnelData?.d1Sent||leads.filter(l=>l.day1_sent||l.fu1_sent).length, '#6366f1'],
+                  ['Day 3 Sent', analytics?.funnelData?.d3Sent||leads.filter(l=>l.day3_sent||l.fu2_sent).length, '#8b5cf6'],
+                  ['Day 7 Sent', analytics?.funnelData?.d7Sent||leads.filter(l=>l.day7_sent||l.fu3_sent).length, '#a855f7'],
+                  ['Sequence Done', analytics?.funnelData?.completed||0, '#10b981'],
+                ].map(([label,val,color],i,arr)=>{
+                  const max=arr[0][1]||1
+                  return(
+                    <div key={label} style={{marginBottom:10}}>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                        <span style={{color:'var(--t2)'}}>{label}</span>
+                        <span style={{fontWeight:700,color}}>{val}</span>
+                      </div>
+                      <div style={{background:'var(--br)',borderRadius:99,height:8}}>
+                        <div style={{width:`${Math.round(val/max*100)}%`,background:color,borderRadius:99,height:8,transition:'width 0.5s'}}/>
+                      </div>
                     </div>
                   )
                 })}
+              </div>
+              {/* Niche Breakdown */}
+              <div className="card">
+                <div className="ct">Top Niches ({analyticsRange}d)</div>
+                {analytics?.nicheDist ? (
+                  <BChart items={Object.entries(analytics.nicheDist).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([n,v],i)=>({label:n,val:v,color:SRCCOL[i%SRCCOL.length]}))}/>
+                ) : (
+                  <div style={{color:'var(--t3)',fontSize:13,padding:'20px 0',textAlign:'center'}}>
+                    Loading niche data...
+                  </div>
+                )}
               </div>
             </div>
           </div>}
