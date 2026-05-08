@@ -126,6 +126,23 @@ export default async function handler(req, res) {
   // ── Log Success ──────────────────────────────────────────
   await logIntake({ status: 'success', body: req.body, lead_id: lead.id })
 
+  // ── Trigger n8n Webhook ───────────────────────────────────
+  const N8N_WEBHOOK = process.env.N8N_WEBHOOK_URL
+  if (N8N_WEBHOOK) {
+    fetch(N8N_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name:    lead.name,
+        email:   lead.email   || '',
+        phone:   lead.phone   || '',
+        niche:   lead.niche   || '',
+        source:  lead.source  || 'Website',
+        lead_id: lead.id
+      })
+    }).catch(e => console.error('n8n webhook error:', e.message))
+  }
+
   // ── Return ───────────────────────────────────────────────
   return res.status(201).json({
     success: true,

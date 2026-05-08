@@ -76,6 +76,29 @@ export default async function handler(req, res) {
       .single()
 
     if (error) return res.status(500).json({ error: error.message })
+
+    // ── Trigger n8n webhook automatically ─────────────────
+    const N8N_WEBHOOK = process.env.N8N_WEBHOOK_URL
+    if (N8N_WEBHOOK && data) {
+      try {
+        await fetch(N8N_WEBHOOK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name:   data.name,
+            email:  data.email  || '',
+            phone:  data.phone  || '',
+            niche:  data.niche  || '',
+            source: data.source || 'Manual',
+            lead_id: data.id
+          })
+        })
+      } catch(e) {
+        // Don't fail lead creation if webhook fails
+        console.error('n8n webhook error:', e.message)
+      }
+    }
+
     return res.status(201).json(data)
   }
 
