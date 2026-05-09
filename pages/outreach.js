@@ -74,6 +74,7 @@ export default function OutreachPage() {
   const [notif, setNotif]         = useState(null)
   const [openSection, setOpenSection] = useState({gym:true,salon:true,clinic:true,restaurant:true})
   const [openFuStage, setOpenFuStage] = useState({day3:true,day7:true,day14:true})
+  const [filter, setFilter] = useState('pending')   // 'all' | 'pending' | 'sent' | 'skipped' — default to pending
   const ntTimer = useRef(null)
   const pollTimer = useRef(null)
   const cancelOpenRef = useRef(false)
@@ -385,17 +386,29 @@ export default function OutreachPage() {
         </div>
       </header>
 
-      {/* SUMMARY STRIP */}
+      {/* SUMMARY STRIP — also acts as filter tabs */}
       <div className="summary">
-        <div className="stat">
+        <div
+          className={`stat ${filter==='all'?'active':''}`}
+          onClick={() => setFilter('all')}
+          title="Show all messages"
+        >
           <div className="stat-num">{summary.total}</div>
           <div className="stat-lbl">Total</div>
         </div>
-        <div className="stat">
+        <div
+          className={`stat ${filter==='pending'?'active':''}`}
+          onClick={() => setFilter('pending')}
+          title="Show only pending (default)"
+        >
           <div className="stat-num" style={{color:'#475569'}}>{summary.pending}</div>
           <div className="stat-lbl">Pending</div>
         </div>
-        <div className="stat">
+        <div
+          className={`stat ${filter==='sent'?'active':''}`}
+          onClick={() => setFilter('sent')}
+          title="Show only sent"
+        >
           <div className="stat-num" style={{color:'#059669'}}>{summary.sent}</div>
           <div className="stat-lbl">Sent</div>
         </div>
@@ -454,19 +467,35 @@ export default function OutreachPage() {
 
       {/* NICHE SECTIONS */}
       <div className="content">
+        {/* Filter indicator banner */}
+        {filter !== 'all' && summary.total > 0 && (
+          <div className="filter-banner">
+            Showing only <strong>{filter}</strong> messages.
+            <button className="filter-clear" onClick={() => setFilter('all')}>Show all</button>
+          </div>
+        )}
+
         {Object.entries(NICHE_META).map(([niche, meta]) => {
-          const list  = grouped[niche] || []
+          const fullList = grouped[niche] || []
+          // Apply filter — when 'all', show everything; otherwise only matching status
+          const list = filter === 'all'
+            ? fullList
+            : fullList.filter(i => i.status === filter)
           const open  = openSection[niche]
           const count = list.length
-          const sent  = list.filter(i => i.status === 'sent').length
-          if (count === 0 && summary.total > 0) return null
+          const totalInNiche = fullList.length
+          const sent  = fullList.filter(i => i.status === 'sent').length
+          // Hide section if filter applied and no matching items
+          if (count === 0) return null
 
           return (
             <div key={niche} className="section">
               <div className="sec-head" onClick={() => setOpenSection(p => ({...p, [niche]: !p[niche]}))}>
                 <span className="sec-icon">{meta.icon}</span>
                 <span className="sec-label">{meta.label}</span>
-                <span className="sec-count">{sent}/{count}</span>
+                <span className="sec-count">
+                  {filter === 'all' ? `${sent}/${totalInNiche}` : `${count}`}
+                </span>
                 <span className="sec-toggle">{open ? '▾' : '▸'}</span>
               </div>
 
@@ -677,7 +706,12 @@ export default function OutreachPage() {
       .title .t1{font-size:17px;font-weight:700;color:var(--text)}
       .title .t2{font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace}
       .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:14px 16px}
-      .stat{background:var(--panel);border:1px solid var(--br);border-radius:10px;padding:12px 8px;text-align:center;box-shadow:0 1px 2px rgba(15,23,42,0.03)}
+      .stat{background:var(--panel);border:1px solid var(--br);border-radius:10px;padding:12px 8px;text-align:center;box-shadow:0 1px 2px rgba(15,23,42,0.03);cursor:pointer;transition:all 0.15s ease;user-select:none}
+      .stat:hover{border-color:var(--accent);transform:translateY(-1px)}
+      .stat.active{border-color:var(--accent);background:#eef2ff;box-shadow:0 0 0 2px rgba(37,99,235,0.15)}
+      .filter-banner{background:#fef3c7;border:1px solid #fde68a;color:#92400e;padding:10px 14px;border-radius:10px;font-size:13px;display:flex;align-items:center;gap:10px;margin-bottom:14px}
+      .filter-clear{background:transparent;border:1px solid #92400e;color:#92400e;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;margin-left:auto}
+      .filter-clear:hover{background:#92400e;color:#fff}
       .stat-num{font-size:22px;font-weight:800;color:var(--text);line-height:1}
       .stat-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em;margin-top:5px;font-family:'JetBrains Mono',monospace}
       .progress{margin:0 16px 12px;background:var(--bg);border-radius:99px;height:8px;position:relative;overflow:hidden;border:1px solid var(--br)}
