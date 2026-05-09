@@ -1,28 +1,35 @@
 // pages/api/analytics.js — Advanced Analytics API
+//
+// PERFORMANCE FIX:
+//   পুরোনো version Promise.all-এ ৩টা full-table query চালাত (3 × 17k rows from Supabase).
+//   এখন একবার full table fetch করে সব calc memory-তে — Supabase egress ১/৩ হয়ে যাবে.
+
 import { getServiceClient } from '../../lib/supabase'
+
+const ANALYTICS_COLUMNS = 'id,status,score,source,niche,created_at,priority,fu1_sent,fu2_sent,fu3_sent,day1_sent,day3_sent,day7_sent,email_sequence_status'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-  res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60')
+  // Cache for 60s — analytics doesn't need real-time precision
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120')
 
   const supabase = getServiceClient()
   const { range = '30' } = req.query
   const days = parseInt(range)
-  const since = new Date(Date.now() - days * 86400000).toISOString()
+  const sinceMs = Date.now() - days * 86400000
 
   try {
-    const [leadsRes, recentRes, funnelRes] = await Promise.all([
-      // All leads for overall stats
-      supabase.from('leads').select('id,status,score,source,niche,created_at,fu1_sent,fu2_sent,fu3_sent,priority'),
-      // Recent leads in range
-      supabase.from('leads').select('id,status,score,source,niche,created_at,priority').gte('created_at', since),
-      // Follow-up funnel
-      supabase.from('leads').select('id,fu1_sent,fu2_sent,fu3_sent,email_sequence_status,day1_sent,day3_sent,day7_sent')
-    ])
+    // Single query — fetch all leads with only the columns we need
+    const { data, error } = await supabase
+      .from('leads')
+      .select(ANALYTICS_COLUMNS)
+      .limit(50000)
+    if (error) return res.status(500).json({ error: error.message })
 
-    const all    = leadsRes.data  || []
-    const recent = recentRes.data || []
-    const funnel = funnelRes.data || []
+    const all = data || []
+    // Recent slice computed in-memory (avoids 2nd round-trip)
+    const recent = all.filter(l => l.created_at && new Date(l.created_at).getTime() >= sinceMs)
+    const funnel = all   // funnel uses the same dataset
 
     // ── Status distribution
     const statusDist = {}
@@ -59,17 +66,16 @@ export default async function handler(req, res) {
     })
 
     // ── Follow-up funnel
-    const totalWithEmail = funnel.filter(l => l.day1_sent || l.fu1_sent).length
     const funnelData = {
       total: all.length,
-      contacted: all.filter(l=>l.status==='Contacted').length,
+      contacted:  all.filter(l=>l.status==='Contacted').length,
       interested: all.filter(l=>l.status==='Interested').length,
-      demo: all.filter(l=>l.status==='Demo Booked').length,
-      won: all.filter(l=>l.status==='Closed Won').length,
-      d1Sent: funnel.filter(l=>l.day1_sent||l.fu1_sent).length,
-      d3Sent: funnel.filter(l=>l.day3_sent||l.fu2_sent).length,
-      d7Sent: funnel.filter(l=>l.day7_sent||l.fu3_sent).length,
-      completed: funnel.filter(l=>l.email_sequence_status==='completed').length,
+      demo:       all.filter(l=>l.status==='Demo Booked').length,
+      won:        all.filter(l=>l.status==='Closed Won').length,
+      d1Sent:     funnel.filter(l=>l.day1_sent||l.fu1_sent).length,
+      d3Sent:     funnel.filter(l=>l.day3_sent||l.fu2_sent).length,
+      d7Sent:     funnel.filter(l=>l.day7_sent||l.fu3_sent).length,
+      completed:  funnel.filter(l=>l.email_sequence_status==='completed').length,
     }
 
     // ── Priority breakdown

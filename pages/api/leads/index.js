@@ -10,15 +10,17 @@ const LEAD_COLUMNS = 'id,name,phone,email,source,status,niche,notes,tags,score,c
 export default async function handler(req, res) {
   const supabase = getServiceClient()
 
-  // Cache headers — allow CDN/browser to cache for 10s (data is fetched every 30s anyway)
-  res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=20')
+  // Cache headers — allow CDN/browser to cache for 30s.
+  // Frontend refreshes every 2 min, so 30s of CDN cache cuts Supabase reads
+  // dramatically when multiple devices/tabs hit the API.
+  res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60')
 
   // ── GET: List leads ──────────────────────────────────────
   if (req.method === 'GET') {
     const { tag, niche, min_score, source, status, page, limit } = req.query
 
-    // Reduced default page size from 2000 → 500 for faster mobile loads
-    const pageSize = Math.min(parseInt(limit) || 500, 1000)
+    // Allow up to 2000 per page so 17k leads fetch in ~9 calls instead of 35
+    const pageSize = Math.min(parseInt(limit) || 500, 2000)
     const pageNum  = parseInt(page) || 1
     const from     = (pageNum - 1) * pageSize
     const to       = from + pageSize - 1
