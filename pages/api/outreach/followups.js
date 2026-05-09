@@ -44,20 +44,21 @@ function detectNiche(lead) {
 }
 
 // Follow-up message templates per niche per stage
+// NO EMOJIS — same encoding-safety reason as fresh outreach templates.
 // Each one has a different angle so it doesn't feel repetitive
 const FOLLOWUP_TEMPLATES = {
   gym: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
+    day3: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Following up on my message from a few days back about gym automation.
 
-Just wanted to check — did you get a chance to look at it? No worries if you're busy, even a quick "later" or "not interested" helps me know what to do next 🙂
+Just wanted to check — did you get a chance to look at it? No worries if you're busy, even a quick "later" or "not interested" helps me know what to do next.
 
 In case you missed it: ${site}`,
 
     day7: (l, site) => `Hi${l.name?' '+l.name:''},
 
-One more from me, then I'll stop bothering you 🙂
+One more from me, then I'll stop bothering you.
 
 Quick context — we recently helped a gym save 2 hours/day on manual messaging and saw 32% more renewals in 60 days.
 
@@ -68,26 +69,26 @@ If timing isn't right, just say "later" — totally fine.`,
 
     day14: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Final message from me, promise! 🙏
+Final message from me, promise.
 
 If WhatsApp automation isn't a priority right now, no worries at all. The offer stands whenever you're ready:
 ${site}
 
-Wish you the best with the gym! 💪`,
+Wish you the best with the gym!`,
   },
 
   salon: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''}! ✨
+    day3: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Following up on my message about salon automation from a few days back.
 
-Wondering if you got a chance to look — no pressure, even a quick "later" helps me know whether to circle back 🙂
+Wondering if you got a chance to look — no pressure, even a quick "later" helps me know whether to circle back.
 
 Demo if helpful: ${site}`,
 
     day7: (l, site) => `Hi${l.name?' '+l.name:''},
 
-One more reach-out, then I'll stop 🙂
+One more reach-out, then I'll stop.
 
 Quick story — a salon we onboarded last month saw 47 extra bookings just from auto-reminders alone. No extra ads, no extra staff.
 
@@ -97,12 +98,12 @@ If timing's off, just reply "later" — all good.`,
 
     day14: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Last message, promise 🙏
+Last message, promise.
 
 If automation isn't on your radar right now, totally understand. Whenever you're ready:
 ${site}
 
-Best wishes for the salon! ✨`,
+Best wishes for the salon!`,
   },
 
   clinic: {
@@ -110,13 +111,13 @@ Best wishes for the salon! ✨`,
 
 Following up on my message about clinic automation from a few days ago.
 
-Did you get a chance to look? Even a quick "not now" helps me plan next steps 🙂
+Did you get a chance to look? Even a quick "not now" helps me plan next steps.
 
 Demo: ${site}`,
 
     day7: (l, site) => `Hi${l.name?' '+l.name:''},
 
-One more from me, then I'll stop 🙂
+One more from me, then I'll stop.
 
 Quick stat — clinics using our reminder system saw 60% reduction in missed appointments. Real impact for patient care + revenue.
 
@@ -126,7 +127,7 @@ If not the right time, just reply "later" — no pressure.`,
 
     day14: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Final message from me 🙏
+Final message from me.
 
 If automation isn't a priority now, completely understand. Available whenever:
 ${site}
@@ -135,17 +136,17 @@ Wishing the clinic continued success!`,
   },
 
   restaurant: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''}!
+    day3: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Following up on my message about restaurant automation a few days back.
 
-Did you get a chance to look? Even a quick reply helps me know what to do next 🙂
+Did you get a chance to look? Even a quick reply helps me know what to do next.
 
 Demo: ${site}`,
 
     day7: (l, site) => `Hi${l.name?' '+l.name:''},
 
-One more from me, then I'll stop 🙂
+One more from me, then I'll stop.
 
 Quick story — a restaurant we onboarded saw 22% more repeat orders from auto WhatsApp messaging. Customers come back more often when they're remembered.
 
@@ -155,28 +156,28 @@ If not now, just say "later" — all good.`,
 
     day14: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Last message, promise 🙏
+Last message, promise.
 
 Whenever you're ready to explore it:
 ${site}
 
-Wishing the restaurant continued success! 🍽️`,
+Wishing the restaurant continued success!`,
   },
 }
 
 // Generic fallback templates for leads where niche couldn't be detected
 const GENERIC_TEMPLATES = {
-  day3: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
+  day3: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Following up on my message from a few days back. Did you get a chance to look at AutoFlowa?
 
-No pressure — even a quick "later" or "not interested" helps me plan 🙂
+No pressure — even a quick "later" or "not interested" helps me plan.
 
 Demo: ${site}`,
 
   day7: (l, site) => `Hi${l.name?' '+l.name:''},
 
-One more from me, then I'll stop 🙂
+One more from me, then I'll stop.
 
 If automation might help your business with WhatsApp messaging:
 ${site}
@@ -185,7 +186,7 @@ If timing isn't right, just say "later" — totally fine.`,
 
   day14: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Final message, promise 🙏
+Final message, promise.
 
 The offer stands whenever you're ready:
 ${site}

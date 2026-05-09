@@ -58,51 +58,55 @@ function isLikelyValidWhatsAppNumber(phone) {
 // Designed for: WhatsApp Business App (manual send by user)
 // Strategy: Universal English (works PAN-India) + casual friendly tone + language-switch CTA
 // Brand: AutoFlowa — https://www.autoflowa.in/
+//
+// IMPORTANT: NO EMOJIS in templates. Some encoding pipelines (browser↔server↔
+// WhatsApp URL) corrupt 4-byte UTF-8 emoji chars into "�" (replacement char).
+// Clean text-only also tests better — feels personal, not spammy.
 const TEMPLATES = {
-  gym: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
+  gym: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Saw your gym's page — really impressive setup! 💪
+Saw your gym's page — really impressive setup!
 
 Quick question — do you send renewal reminders, missed-class follow-ups, and special offers to members manually, or is there an automation handling it?
 
 I run AutoFlowa — we build WhatsApp automation specifically for gyms:
 
-✅ Auto welcome message when someone joins
-✅ "Miss you" reminder if they skip 7 days
-✅ Renewal reminder 3 days before expiry
-✅ Birthday wishes + personal offer
+- Auto welcome message when someone joins
+- "Miss you" reminder if they skip 7 days
+- Renewal reminder 3 days before expiry
+- Birthday wishes + personal offer
 
 One of our gym clients saw 38% more renewals after setup.
 
 Want a 5-min demo? Check it out:
 ${site}
 
-No cost, no commitment — just take a look 🙂
+No cost, no commitment — just take a look.
 
-_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
+(Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!)`,
 
-  salon: (l, site) => `Hi${l.name?' '+l.name:''}! ✨
+  salon: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Your salon's work looks beautiful — really love the aesthetic!
 
 I wanted to share a system AutoFlowa built specifically for salons. It automatically handles:
 
-✅ Thank-you message after first visit
-✅ Appointment reminders (24hr + 2hr before)
-✅ Birthday wishes with special offer
-✅ "We miss you" message after 30 days
-✅ Festival promo broadcasts
+- Thank-you message after first visit
+- Appointment reminders (24hr + 2hr before)
+- Birthday wishes with special offer
+- "We miss you" message after 30 days
+- Festival promo broadcasts
 
 A recent salon client got 47 extra bookings/month from auto-reminders alone.
 
 5-min demo here:
 ${site}
 
-Free demo, zero obligation — just take a look 🙂
+Free demo, zero obligation — just take a look.
 
-_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
+(Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!)`,
 
-  clinic: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
+  clinic: (l, site) => `Hi${l.name?' '+l.name:''},
 
 Came across your clinic and wanted to reach out.
 
@@ -110,42 +114,42 @@ Quick question — do you handle appointment confirmations, follow-up reminders,
 
 At AutoFlowa we build WhatsApp automation for clinics:
 
-✅ Auto appointment confirmation
-✅ 24hr reminder (cuts missed appointments by 60%)
-✅ Follow-up day reminders
-✅ New patient onboarding flow
+- Auto appointment confirmation
+- 24hr reminder (cuts missed appointments by 60%)
+- Follow-up day reminders
+- New patient onboarding flow
 
 Patient data secure, all communication private.
 
 Demo + pricing here:
 ${site}
 
-Free demo, no obligation 🙂
+Free demo, no obligation.
 
-_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
+(Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!)`,
 
-  restaurant: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
+  restaurant: (l, site) => `Hi${l.name?' '+l.name:''},
 
-Your restaurant's menu looks amazing — got me hungry just looking! 😄
+Your restaurant's menu looks great!
 
 On a serious note — do you send order confirmations, delivery updates, weekly offers, and birthday discounts to customers via WhatsApp?
 
 AutoFlowa builds restaurant-specific automation:
 
-✅ Auto order confirmation
-✅ Delivery status updates
-✅ "Miss you + 10% off" after 7 days
-✅ Weekly offer broadcasts
-✅ Birthday free dessert offers
+- Auto order confirmation
+- Delivery status updates
+- "Miss you + 10% off" after 7 days
+- Weekly offer broadcasts
+- Birthday free dessert offers
 
 A recent restaurant client saw 22% more repeat orders after setup.
 
 5-min demo here:
 ${site}
 
-Free, works for any size restaurant 🙂
+Free, works for any size restaurant.
 
-_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
+(Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!)`,
 }
 
 // Detect niche from lead's niche/notes/tags fields.
