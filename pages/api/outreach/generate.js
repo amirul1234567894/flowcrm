@@ -7,12 +7,13 @@
 
 import { getServiceClient } from '../../../lib/supabase'
 
-// Niche keyword matchers — covers Bengali/Hindi/English variations
+// Niche keyword matchers — covers common business name patterns
+// Word-boundary matched (whole word only), case-insensitive
 const NICHE_KEYWORDS = {
-  gym:        ['gym','fitness','yoga','crossfit','workout','training','exercise','akhara'],
-  salon:      ['salon','parlor','parlour','beauty','makeup','spa','hair','barber','nail'],
-  clinic:     ['clinic','hospital','doctor','dental','dentist','medical','health','physio','diagnostic'],
-  restaurant: ['restaurant','cafe','food','dhaba','biriyani','restro','catering','bakery','pizza'],
+  gym:        ['gym','gyms','fitness','crossfit','workout','akhara','bodybuilding'],
+  salon:      ['salon','salons','parlor','parlour','beauty','makeup','spa','barber','unisex'],
+  clinic:     ['clinic','clinics','hospital','dental','dentist','physio','diagnostic','dermatology','derma','skin','laser'],
+  restaurant: ['restaurant','restaurants','cafe','dhaba','biriyani','restro','catering','bakery','pizzeria','pizza','burger'],
 }
 
 // Per-niche message templates
@@ -109,14 +110,57 @@ Free, works for any size restaurant 🙂
 _Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
 }
 
-// Detect niche from lead's niche field — returns 'gym'/'salon'/etc, or null
+// Detect niche from lead's niche/notes/tags fields.
+// Returns 'gym'/'salon'/'clinic'/'restaurant' or null.
+//
+// Strategy:
+//   1. PRIMARY: check `niche` field with whole-word match (most reliable)
+//   2. FALLBACK: check `notes` field with whole-word match
+//   3. SKIP `tags` for niche detection — tags often contain unrelated stuff
+//   4. Score each niche by keyword count — return highest score
+//   5. If multiple niches match equally → return null (ambiguous = skip)
+//
+// Whole-word boundary prevents "shaving cream" matching "ham" in "shave[ham]"
+// or "Full Stack Automation" matching "auto" — only exact word matches count.
 function detectNiche(lead) {
-  const text = ((lead.niche||'') + ' ' + (lead.notes||'') + ' ' + (lead.tags||[]).join(' '))
-                .toLowerCase()
-  for (const [key, keywords] of Object.entries(NICHE_KEYWORDS)) {
-    if (keywords.some(k => text.includes(k))) return key
+  const nicheField = (lead.niche || '').toLowerCase().trim()
+  const notesField = (lead.notes || '').toLowerCase().trim()
+  const nameField  = (lead.name  || '').toLowerCase().trim()  // business name often has the niche
+
+  // Quick reject: niche field has clearly non-business keywords
+  // ("automation", "developer", "student" etc. are NOT business niches)
+  const REJECT_KEYWORDS = ['automation', 'developer', 'student', 'system', 'software', 'app', 'project', 'test']
+  if (nicheField && REJECT_KEYWORDS.some(k => nicheField.includes(k))) {
+    return null  // skip leads that look like leads-for-our-service, not actual businesses
   }
-  return null
+
+  // Score each niche by counting keyword whole-word matches
+  const scores = { gym: 0, salon: 0, clinic: 0, restaurant: 0 }
+  const wordBoundary = (text, word) => {
+    const re = new RegExp(`\\b${word}\\b`, 'i')
+    return re.test(text)
+  }
+
+  // Weights:
+  //   niche field = 3 (most reliable)
+  //   name field  = 2 (business name like "Advance Skin Hair & Laser Clinic" — strong signal)
+  //   notes field = 1 (least reliable)
+  for (const [key, keywords] of Object.entries(NICHE_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (nicheField && wordBoundary(nicheField, kw)) scores[key] += 3
+      if (nameField  && wordBoundary(nameField,  kw)) scores[key] += 2
+      if (notesField && wordBoundary(notesField, kw)) scores[key] += 1
+    }
+  }
+
+  // Find highest-scoring niche
+  const max = Math.max(...Object.values(scores))
+  if (max === 0) return null  // no match at all
+
+  const matched = Object.keys(scores).filter(k => scores[k] === max)
+  if (matched.length > 1) return null  // ambiguous — skip rather than guess wrong
+
+  return matched[0]
 }
 
 export default async function handler(req, res) {
