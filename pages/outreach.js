@@ -64,6 +64,7 @@ export default function OutreachPage() {
   const [authed, setAuthed]       = useState(false)
   const [items, setItems]         = useState([])
   const [summary, setSummary]     = useState({ total:0, pending:0, sent:0, skipped:0, failed:0, byNiche:{} })
+  const [followups, setFollowups] = useState({ day3:[], day7:[], day14:[], summary:{total:0,day3:0,day7:0,day14:0} })
   const [loading, setLoading]     = useState(true)
   const [generating, setGenerating] = useState(false)
   const [openingAll, setOpeningAll] = useState(false)
@@ -72,6 +73,7 @@ export default function OutreachPage() {
   const [editText, setEditText]   = useState('')
   const [notif, setNotif]         = useState(null)
   const [openSection, setOpenSection] = useState({gym:true,salon:true,clinic:true,restaurant:true})
+  const [openFuStage, setOpenFuStage] = useState({day3:true,day7:true,day14:true})
   const ntTimer = useRef(null)
   const pollTimer = useRef(null)
   const cancelOpenRef = useRef(false)
@@ -94,6 +96,26 @@ export default function OutreachPage() {
     setLoading(false)
   }, [])
 
+  const fetchFollowups = useCallback(async () => {
+    try {
+      const res = await fetch('/api/outreach/followups')
+      if (res.ok) {
+        const data = await res.json()
+        setFollowups({
+          day3:    data.day3    || [],
+          day7:    data.day7    || [],
+          day14:   data.day14   || [],
+          summary: data.summary || { total: 0, day3: 0, day7: 0, day14: 0 },
+        })
+      }
+    } catch(e) { console.error('fetchFollowups error:', e) }
+  }, [])
+
+  const refreshAll = useCallback(() => {
+    fetchToday()
+    fetchFollowups()
+  }, [fetchToday, fetchFollowups])
+
   // Auth + initial fetch
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -101,16 +123,16 @@ export default function OutreachPage() {
       router.replace('/login')
     } else {
       setAuthed(true)
-      fetchToday()
+      refreshAll()
     }
   }, [])
 
-  // Poll every 30s
+  // Poll every 30s — both fresh and follow-ups
   useEffect(() => {
     if (!authed) return
-    pollTimer.current = setInterval(fetchToday, 30000)
+    pollTimer.current = setInterval(refreshAll, 30000)
     return () => clearInterval(pollTimer.current)
-  }, [authed, fetchToday])
+  }, [authed, refreshAll])
 
   const generateToday = async () => {
     setGenerating(true)
@@ -180,7 +202,70 @@ export default function OutreachPage() {
     notify('Stopped')
   }
 
-  // Mark sent without notification (used by openAll loop)
+  // ── FOLLOW-UP HANDLERS ───────────────────────────────────────────
+  // Mark a follow-up as sent: updates lead's fu1/fu2/fu3 flags + logs message
+  const markFollowupSent = async (item, silent = false) => {
+    try {
+      const res = await fetch('/api/outreach/followup-mark', {
+        method:  'POST',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({
+          lead_id: item.lead_id,
+          stage:   item.stage,
+          message: item.message,
+        })
+      })
+      if (res.ok) {
+        if (!silent) notify(`✅ ${item.stage} follow-up marked sent`)
+        fetchFollowups()
+      } else {
+        if (!silent) notify('Mark failed', 'err')
+      }
+    } catch(e) {
+      if (!silent) notify('Mark failed', 'err')
+    }
+  }
+
+  // Open all follow-ups (any stage) one-by-one in WhatsApp with gap
+  const openAllFollowups = async () => {
+    const all = [...followups.day3, ...followups.day7, ...followups.day14]
+    if (all.length === 0) {
+      notify('No follow-ups due')
+      return
+    }
+    if (!confirm(
+      `${all.length} follow-up message-er sob ek por ek WhatsApp e khulbe.\n\n` +
+      `Each-er por:\n` +
+      `1. WhatsApp e Send press korben\n` +
+      `2. CRM tab e back ashben\n` +
+      `3. Auto next-ta khulbe 8-15s pore\n\n` +
+      `Confirm?`
+    )) return
+
+    setOpeningAll(true)
+    cancelOpenRef.current = false
+    setOpenProgress({ done: 0, total: all.length })
+    notify(`Opening ${all.length} follow-ups…`)
+
+    for (let i = 0; i < all.length; i++) {
+      if (cancelOpenRef.current) break
+      const item = all[i]
+      window.open(waBusinessLink(item.lead_phone, item.message), '_blank')
+      await new Promise(r => setTimeout(r, 5000))
+      await markFollowupSent(item, true)
+      setOpenProgress({ done: i + 1, total: all.length })
+      if (i < all.length - 1 && !cancelOpenRef.current) {
+        const gap = 8000 + Math.floor(Math.random() * 7000)
+        await new Promise(r => setTimeout(r, gap))
+      }
+    }
+
+    setOpeningAll(false)
+    fetchFollowups()
+    notify('✅ All follow-ups opened!')
+  }
+
+  // Mark sent without notification (used by openAll fresh loop)
   const markSentSilent = async (id) => {
     try {
       await fetch(`/api/outreach/${id}`, {
@@ -286,8 +371,8 @@ export default function OutreachPage() {
           <div className="stat-lbl">Sent</div>
         </div>
         <div className="stat">
-          <div className="stat-num" style={{color:'#94a3b8'}}>{summary.skipped}</div>
-          <div className="stat-lbl">Skipped</div>
+          <div className="stat-num" style={{color:'#d97706'}}>{followups.summary.total}</div>
+          <div className="stat-lbl">Follow-ups</div>
         </div>
       </div>
 
@@ -314,16 +399,22 @@ export default function OutreachPage() {
               WhatsApp khulche… Send press korun, tab e back ashun, next auto khulbe.
             </div>
           </>
+        ) : summary.pending === 0 ? (
+          <>
+            <button className="btn primary big" onClick={generateToday} disabled={generating}>
+              {generating ? '⏳ Generating…' : '⚡ Generate More Messages'}
+            </button>
+            <div className="hint">
+              ✅ All {summary.sent} sent! Generate next batch (3 per niche, 12 total).
+            </div>
+          </>
         ) : (
           <>
             <button
               className="btn primary big"
               onClick={openAllInWhatsApp}
-              disabled={summary.pending === 0}
             >
-              {summary.pending === 0
-                ? '✅ All done!'
-                : `💬 Open All ${summary.pending} in WhatsApp`}
+              {`💬 Open All ${summary.pending} in WhatsApp`}
             </button>
             <div className="hint">
               ↑ Ek por ek WhatsApp khulbe with 8-15s gap. Send press kore back ashben, next ta auto khulbe. Or single message-er pashe "💬 WhatsApp" button use korun.
@@ -435,6 +526,94 @@ export default function OutreachPage() {
             <div className="empty-sub">Click the generate button above to pick 12 leads from your CRM.</div>
           </div>
         )}
+
+        {/* ── FOLLOW-UPS DUE SECTION ──────────────────────────────── */}
+        {followups.summary.total > 0 && (
+          <div className="fu-section">
+            <div className="fu-section-head">
+              <div className="fu-section-title">
+                🔔 Follow-ups Due <span className="fu-total-badge">{followups.summary.total}</span>
+              </div>
+              <div className="fu-section-sub">
+                Leads ja age outreach hoyeche kintu reply ashe ni. Auto-skip: reply ashle list theke chole jay.
+              </div>
+            </div>
+
+            {!openingAll && (
+              <button
+                className="btn primary big"
+                onClick={openAllFollowups}
+                style={{marginBottom:14}}
+              >
+                💬 Open All {followups.summary.total} Follow-ups in WhatsApp
+              </button>
+            )}
+
+            {[
+              { key: 'day3',  label: 'Day 3 — Soft check-in',          color: '#0891b2', list: followups.day3  },
+              { key: 'day7',  label: 'Day 7 — Different angle',        color: '#7c3aed', list: followups.day7  },
+              { key: 'day14', label: 'Day 14 — Final reach-out',       color: '#dc2626', list: followups.day14 },
+            ].map(({key, label, color, list}) => {
+              if (list.length === 0) return null
+              const open = openFuStage[key]
+              return (
+                <div key={key} className="section">
+                  <div
+                    className="sec-head"
+                    onClick={() => setOpenFuStage(p => ({...p, [key]: !p[key]}))}
+                    style={{borderLeftWidth:4, borderLeftColor:color, borderLeftStyle:'solid'}}
+                  >
+                    <span className="sec-label" style={{color}}>{label}</span>
+                    <span className="sec-count">{list.length}</span>
+                    <span className="sec-toggle">{open ? '▾' : '▸'}</span>
+                  </div>
+
+                  {open && list.map(item => (
+                    <div key={`${item.lead_id}-${item.stage}`} className="card">
+                      <div className="card-top">
+                        <div className="lead-info">
+                          <div className="lead-name">{item.lead_name}</div>
+                          <div className="lead-phone">{item.lead_phone}</div>
+                        </div>
+                        <span className="status-pill" style={{color, borderColor:color}}>
+                          {item.days_old}d old
+                        </span>
+                      </div>
+
+                      <div className="msg">{item.message}</div>
+
+                      <div className="card-actions">
+                        <a
+                          className="btn small wa"
+                          href={waBusinessLink(item.lead_phone, item.message)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          💼 WA Business
+                        </a>
+                        <a
+                          className="btn small wa-alt"
+                          href={waLink(item.lead_phone, item.message)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Regular WhatsApp (fallback)"
+                        >
+                          💬
+                        </a>
+                        <button
+                          className="btn small ok"
+                          onClick={() => markFollowupSent(item)}
+                        >
+                          ✓ Mark Sent
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* NOTIF */}
@@ -513,6 +692,12 @@ export default function OutreachPage() {
       .empty-icon{font-size:42px;opacity:0.5;margin-bottom:12px}
       .empty-title{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:6px}
       .empty-sub{font-size:13px;color:var(--t3)}
+      /* FOLLOW-UPS SECTION */
+      .fu-section{margin-top:30px;padding-top:24px;border-top:2px solid var(--br);padding-left:4px;padding-right:4px}
+      .fu-section-head{margin-bottom:14px}
+      .fu-section-title{font-size:18px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:10px}
+      .fu-total-badge{background:#d97706;color:#fff;font-size:13px;font-family:'JetBrains Mono',monospace;padding:3px 10px;border-radius:99px;font-weight:700}
+      .fu-section-sub{font-size:12px;color:var(--t3);margin-top:6px;line-height:1.5}
       .notif{position:fixed;bottom:20px;left:16px;right:16px;background:var(--panel);border:1px solid var(--green);border-radius:10px;padding:13px 16px;font-size:13px;z-index:999;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(15,23,42,0.12);animation:su 0.3s ease;max-width:calc(680px - 32px);margin:0 auto}
       .notif.nerr{border-color:var(--red)}
       .ndot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}

@@ -16,6 +16,16 @@ const NICHE_KEYWORDS = {
   restaurant: ['restaurant','restaurants','cafe','dhaba','biriyani','restro','catering','bakery','pizzeria','pizza','burger'],
 }
 
+// Normalize phone to digits only — last 10 digits = canonical form
+// "+91 9876543210" / "+919876543210" / "9876543210" / "(91) 98765-43210" all → "9876543210"
+// This way duplicate-phone detection works regardless of formatting variation.
+function normalizePhone(phone) {
+  if (!phone) return ''
+  const digits = String(phone).replace(/\D/g, '')   // keep only 0-9
+  // For Indian numbers, keep last 10 digits (drops country code variations)
+  return digits.length >= 10 ? digits.slice(-10) : digits
+}
+
 // Per-niche message templates
 // Designed for: WhatsApp Business App (manual send by user)
 // Strategy: Universal English (works PAN-India) + casual friendly tone + language-switch CTA
@@ -183,48 +193,89 @@ export default async function handler(req, res) {
   const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in/'
 
   try {
-    // 1. Check if already generated today (idempotent)
-    const { data: existing } = await supabase
+    // 1. Smarter idempotent check — only block if PENDING messages exist.
+    //    This allows re-generation after cleanup (deleted pending) or after
+    //    all messages have been sent. Each generate cycle adds NEW pending msgs,
+    //    never duplicates already-pending ones.
+    const { count: pendingCount } = await supabase
       .from('outreach_queue')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('scheduled_for', today)
-      .limit(1)
+      .eq('status', 'pending')
 
-    if (existing && existing.length > 0) {
-      const { count } = await supabase
+    if (pendingCount && pendingCount > 0) {
+      // Already have pending msgs for today — return current count, don't add more
+      const { count: totalCount } = await supabase
         .from('outreach_queue')
         .select('id', { count: 'exact', head: true })
         .eq('scheduled_for', today)
       return res.status(200).json({
         success: true,
         skipped: true,
-        message: 'Already generated for today',
-        count: count || 0,
-        date: today,
+        message: `${pendingCount} pending messages already queued. Send/skip them first, then re-generate for more.`,
+        count:   totalCount || 0,
+        pending: pendingCount,
+        date:    today,
       })
     }
 
-    // 2. Fetch candidate leads — only those with phone, not picked before, not closed
-    //    Order by score (hottest first) and recency
+    // 2. Build phone exclusion list (DUPLICATE PREVENTION)
+    //
+    //    A phone number is excluded if EITHER:
+    //      (a) It has ever appeared in outreach_queue (we sent or queued it before)
+    //      (b) Any lead with that phone has status beyond 'New Lead'
+    //          (Contacted / Interested / Demo Booked / Closed Won / Not Interested)
+    //
+    //    This prevents the SAME WhatsApp number receiving multiple messages even
+    //    when the CRM has duplicate lead entries (same phone, different names/sources).
+
+    // (a) Phones that have already been queued (any time, any status)
+    const { data: queuedPhones } = await supabase
+      .from('outreach_queue')
+      .select('lead_phone')
+    const queuedPhoneSet = new Set(
+      (queuedPhones || []).map(r => normalizePhone(r.lead_phone))
+    )
+
+    // (b) Phones whose lead has been progressed past 'New Lead'
+    const { data: contactedLeads } = await supabase
+      .from('leads')
+      .select('phone')
+      .not('phone', 'is', null)
+      .neq('phone', '')
+      .neq('status', 'New Lead')   // anything other than New Lead = already touched
+    const contactedPhoneSet = new Set(
+      (contactedLeads || []).map(r => normalizePhone(r.phone))
+    )
+
+    const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
+
+    // 3. Fetch candidate leads — fresh ones only
     const { data: candidates, error } = await supabase
       .from('leads')
       .select('id,name,phone,niche,notes,tags,score,status,created_at,outreach_attempted_at')
       .not('phone', 'is', null)
       .neq('phone', '')
       .is('outreach_attempted_at', null)
-      .not('status', 'in', '("Closed Won","Not Interested")')
+      .eq('status', 'New Lead')           // strict — only fresh leads
       .order('score', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .limit(2000)                       // pull a buffer, then filter by niche
+      .limit(3000)                         // pull buffer, filter by niche + dedup
 
     if (error) return res.status(500).json({ error: error.message })
 
-    // 3. Bucket by niche
+    // 4. Bucket by niche, with phone-level dedup within this batch too
     const buckets = { gym: [], salon: [], clinic: [], restaurant: [] }
+    const usedPhonesInBatch = new Set()    // dedup within this generation cycle
     for (const lead of candidates || []) {
+      const phone = normalizePhone(lead.phone)
+      if (!phone) continue                            // skip blank phones
+      if (excludedPhones.has(phone)) continue          // already-contacted phones
+      if (usedPhonesInBatch.has(phone)) continue       // dup within this batch
       const niche = detectNiche(lead)
       if (niche && buckets[niche].length < PER_NICHE) {
         buckets[niche].push(lead)
+        usedPhonesInBatch.add(phone)
       }
       // stop early once all buckets full
       if (Object.values(buckets).every(b => b.length >= PER_NICHE)) break
