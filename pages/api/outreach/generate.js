@@ -27,28 +27,30 @@ function normalizePhone(phone) {
 }
 
 // Heuristic check: is this phone likely to have a WhatsApp account?
-// We can't actually verify (no API), but we can reject obvious junk:
-//   • Too short / too long
-//   • All-same digits (9999999999, 1111111111)
-//   • Sequential garbage (1234567890, 9876543210 with consecutive)
-//   • Indian landline patterns (start with 0 + 2-3 digit STD code)
-//   • Indian mobile MUST start with 6/7/8/9 (per TRAI rules)
+// We can't actually verify (no API), but we can reject obvious junk.
 //
-// Returns true if number passes basic validity checks (NOT 100% accurate but
-// catches ~70-80% of bad numbers that have no WhatsApp).
+// IMPORTANT: This is intentionally LENIENT — we'd rather let through
+// some bad numbers than block real ones. User has manual "📵 No WA"
+// button to handle the few that escape.
+//
+// Returns true if number passes basic validity checks.
 function isLikelyValidWhatsAppNumber(phone) {
   const digits = normalizePhone(phone)
-  if (!digits || digits.length < 10) return false              // too short
-  if (digits.length > 15) return false                          // too long
+  if (!digits || digits.length < 10) return false              // too short — definitely bad
+  if (digits.length > 15) return false                          // too long — definitely bad
   // Indian mobile rule: last 10 digits must start with 6, 7, 8, or 9
-  if (!/^[6-9]/.test(digits)) return false                      // landline / invalid
-  // All same digit check (e.g. 9999999999, 8888888888)
+  // Note: this excludes some valid international numbers (US/UK/etc start with 1/4/etc)
+  // But for India-focused outreach, this is usually safe.
+  if (!/^[6-9]/.test(digits)) return false                      // landline / invalid start
+  // All-same digit only (e.g. 9999999999, 8888888888)
   if (/^(\d)\1{9}$/.test(digits)) return false
-  // Obvious test/junk patterns
-  const junk = ['1234567890','0123456789','9876543210','0000000000','9999999999','7777777777','8888888888','6666666666']
-  if (junk.includes(digits)) return false
-  // Repeating short pattern like "1212121212" or "9090909090"
-  if (/^(\d{2})\1{4}$/.test(digits)) return false
+  // EXACT well-known junk numbers only — no pattern matching that catches real numbers
+  const exactJunk = new Set([
+    '0000000000','1111111111','2222222222','3333333333','4444444444',
+    '5555555555','6666666666','7777777777','8888888888','9999999999',
+    '1234567890','9876543210','0123456789'
+  ])
+  if (exactJunk.has(digits)) return false
   return true
 }
 
@@ -276,44 +278,102 @@ export default async function handler(req, res) {
 
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
 
-    // 3. Fetch candidate leads — fresh ones only
-    const { data: candidates, error } = await supabase
+    // 3. Fetch candidate leads PER NICHE separately to ensure fair representation.
+    //
+    //    Bug fix: Previously we fetched 3000 candidates ordered by score globally,
+    //    then bucketed by niche. But if one niche (e.g. clinic) had higher scores,
+    //    it would dominate the first 3000 results, and gym/salon/restaurant would
+    //    never appear because we never reached them in the loop.
+    //
+    //    Now: fetch a fixed number per niche, so each niche gets equal opportunity.
+
+    // Helper: fetch candidates for one specific niche
+    const fetchForNiche = async (nicheKey) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id,name,phone,niche,notes,tags,score,status,created_at')
+        .not('phone', 'is', null)
+        .neq('phone', '')
+        .is('outreach_attempted_at', null)
+        .eq('status', 'New Lead')
+        .ilike('niche', nicheKey)              // case-insensitive niche match
+        .order('score', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(200)                              // 200 candidates per niche is enough
+                                                 // (we only need 3 valid ones per niche)
+      return error ? [] : (data || [])
+    }
+
+    // Run all 4 niche queries in parallel for speed
+    const [gymCand, salonCand, clinicCand, restCand] = await Promise.all([
+      fetchForNiche('gym'),
+      fetchForNiche('salon'),
+      fetchForNiche('clinic'),
+      fetchForNiche('restaurant'),
+    ])
+
+    // ALSO fetch a small pool of leads with non-exact niche values
+    // (e.g., "Fitness Studio" — name detection will reclassify these)
+    const { data: extraCands } = await supabase
       .from('leads')
-      .select('id,name,phone,niche,notes,tags,score,status,created_at,outreach_attempted_at')
+      .select('id,name,phone,niche,notes,tags,score,status,created_at')
       .not('phone', 'is', null)
       .neq('phone', '')
       .is('outreach_attempted_at', null)
-      .eq('status', 'New Lead')           // strict — only fresh leads
+      .eq('status', 'New Lead')
+      .not('niche', 'in', '(gym,salon,clinic,restaurant)')   // non-exact only
       .order('score', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(3000)                         // pull buffer, filter by niche + dedup
+      .limit(500)
 
-    if (error) return res.status(500).json({ error: error.message })
+    // Combine all candidate pools — each niche has its own fair share now
+    const candidatesByNiche = {
+      gym:        gymCand,
+      salon:      salonCand,
+      clinic:     clinicCand,
+      restaurant: restCand,
+    }
+    const extraCandidates = extraCands || []
 
-    // 4. Bucket by niche, with phone-level dedup within this batch too
+    // 4. Bucket by niche — process each niche's own pool independently
+    //    so each gets a fair shot at finding 3 valid leads.
     const buckets = { gym: [], salon: [], clinic: [], restaurant: [] }
     const usedPhonesInBatch = new Set()    // dedup within this generation cycle
     const invalidPhoneLeadIds = []         // leads with bad phones — auto-mark to never re-pick
-    for (const lead of candidates || []) {
-      const phone = normalizePhone(lead.phone)
-      if (!phone) continue                            // skip blank phones
 
-      // NEW: skip likely-invalid WhatsApp numbers (landline, junk, malformed)
-      // and mark them so they're never picked again
+    // Helper: try to add a lead to the right bucket, returns true if added
+    const tryAddLead = (lead, forcedNiche = null) => {
+      const phone = normalizePhone(lead.phone)
+      if (!phone) return false                                  // skip blank phones
+      // Check phone validity — if bad, mark for auto-skip
       if (!isLikelyValidWhatsAppNumber(lead.phone)) {
         invalidPhoneLeadIds.push(lead.id)
-        continue
+        return false
       }
+      if (excludedPhones.has(phone)) return false                // already-contacted
+      if (usedPhonesInBatch.has(phone)) return false             // dup in this batch
+      // Use forcedNiche if provided (when fetched from per-niche query),
+      // otherwise detect from name/notes (for misc fallback pool)
+      const niche = forcedNiche || detectNiche(lead)
+      if (!niche || !buckets[niche]) return false
+      if (buckets[niche].length >= PER_NICHE) return false       // bucket full
+      buckets[niche].push(lead)
+      usedPhonesInBatch.add(phone)
+      return true
+    }
 
-      if (excludedPhones.has(phone)) continue          // already-contacted phones
-      if (usedPhonesInBatch.has(phone)) continue       // dup within this batch
-      const niche = detectNiche(lead)
-      if (niche && buckets[niche].length < PER_NICHE) {
-        buckets[niche].push(lead)
-        usedPhonesInBatch.add(phone)
+    // Pass 1: Fill each bucket from its own dedicated candidate pool
+    for (const [niche, leads] of Object.entries(candidatesByNiche)) {
+      for (const lead of leads) {
+        if (buckets[niche].length >= PER_NICHE) break
+        tryAddLead(lead, niche)
       }
-      // stop early once all buckets full
+    }
+
+    // Pass 2: Try the extras pool for any niche that's still under-filled
+    //         (uses name-based detectNiche for these)
+    for (const lead of extraCandidates) {
       if (Object.values(buckets).every(b => b.length >= PER_NICHE)) break
+      tryAddLead(lead, null)
     }
 
     // Mark invalid-phone leads as attempted (so they're never picked again).
