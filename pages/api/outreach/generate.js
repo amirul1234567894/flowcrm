@@ -15,85 +15,98 @@ const NICHE_KEYWORDS = {
   restaurant: ['restaurant','cafe','food','dhaba','biriyani','restro','catering','bakery','pizza'],
 }
 
-// Per-niche message templates — uses {{name}}, {{niche_name}}, {{site}} placeholders
-// Templates designed for: WhatsApp Business App (manual send by user)
+// Per-niche message templates
+// Designed for: WhatsApp Business App (manual send by user)
+// Strategy: Universal English (works PAN-India) + casual friendly tone + language-switch CTA
 // Brand: AutoFlowa — https://www.autoflowa.in/
 const TEMPLATES = {
-  gym: (l, site) => `Namaskar${l.name?' '+l.name:''}!
+  gym: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
 
-Apnar gym-er Facebook page dekhe contact korlam. Beautiful setup!
+Saw your gym's page — really impressive setup! 💪
 
-Ekta question chilo — apnara members-der monthly renewal reminder, new offer, ba "missed-class" follow-up sob manually pathan, naki kichu auto system ache?
+Quick question — do you send renewal reminders, missed-class follow-ups, and special offers to members manually, or is there an automation handling it?
 
-Karon ami AutoFlowa-te gym-er specific automation banai —
-✅ Member join holei auto welcome msg
-✅ 7 din na ele "miss you" reminder
-✅ Renewal er 3 din age auto reminder
-✅ Birthday wish + personal offer
+I run AutoFlowa — we build WhatsApp automation specifically for gyms:
 
-Recent ekta gym-e implement korar por 38% more renewals esheche.
+✅ Auto welcome message when someone joins
+✅ "Miss you" reminder if they skip 7 days
+✅ Renewal reminder 3 days before expiry
+✅ Birthday wishes + personal offer
 
-Demo dekhben? Ekta 5 min er video ache amader site e:
+One of our gym clients saw 38% more renewals after setup.
+
+Want a 5-min demo? Check it out:
 ${site}
 
-No cost, no spam — dekhe nile decide korben.`,
+No cost, no commitment — just take a look 🙂
 
-  salon: (l, site) => `Hello${l.name?' '+l.name:''}!
+_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
 
-Apnar salon-er work boddo sundor — Instagram-e dekhlam!
+  salon: (l, site) => `Hi${l.name?' '+l.name:''}! ✨
 
-AutoFlowa theke ekta system show korte chai jeta apnar regular clients-der —
-✅ First visit-er por auto thank you msg
-✅ Appointment-er 24hr/2hr age reminder
-✅ Birthday-te wish + special offer
-✅ 30 din na ele "miss you" message
-✅ Festival-e promo broadcast
+Your salon's work looks beautiful — really love the aesthetic!
 
-Recent ekta client-er salon-e implement korar por 47 booking/month extra esheche shudhu auto reminder theke.
+I wanted to share a system AutoFlowa built specifically for salons. It automatically handles:
 
-Free 5 min demo video amader site e ache:
+✅ Thank-you message after first visit
+✅ Appointment reminders (24hr + 2hr before)
+✅ Birthday wishes with special offer
+✅ "We miss you" message after 30 days
+✅ Festival promo broadcasts
+
+A recent salon client got 47 extra bookings/month from auto-reminders alone.
+
+5-min demo here:
 ${site}
 
-Apnar salon-e exactly kemon hobe seta dekhe niye decide korben.`,
+Free demo, zero obligation — just take a look 🙂
 
-  clinic: (l, site) => `Namaskar${l.name?' '+l.name:''},
+_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
 
-Apnar clinic/hospital-er kotha shune contact korlam.
+  clinic: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
 
-Ekta query — patient appointment confirmation, follow-up reminder, prescription reminder eishab manually hoy naki automation diye hoy?
+Came across your clinic and wanted to reach out.
 
-AutoFlowa-te clinic-er jonno specific WhatsApp automation banai:
-✅ Appointment confirmation auto
-✅ 24hr age reminder (missed appointment 60% kome jay)
-✅ Follow-up er din auto reminder
+Quick question — do you handle appointment confirmations, follow-up reminders, and prescription notifications manually, or is it automated?
+
+At AutoFlowa we build WhatsApp automation for clinics:
+
+✅ Auto appointment confirmation
+✅ 24hr reminder (cuts missed appointments by 60%)
+✅ Follow-up day reminders
 ✅ New patient onboarding flow
 
-HIPAA-friendly, secure, patient data safe.
+Patient data secure, all communication private.
 
-Demo + pricing details:
+Demo + pricing here:
 ${site}
 
-Free demo, no obligation.`,
+Free demo, no obligation 🙂
 
-  restaurant: (l, site) => `Hello${l.name?' '+l.name:''}!
+_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
 
-Apnar restaurant-er menu dekhe pet e khida lege gelo! 😄
+  restaurant: (l, site) => `Hi${l.name?' '+l.name:''}! 👋
 
-Ektu serious kotha — apnara customer-der order confirmation, delivery update, weekly offer, repeat customer er jonno special discount eishab WhatsApp-e pathate paren?
+Your restaurant's menu looks amazing — got me hungry just looking! 😄
 
-Ami AutoFlowa-te restaurant-er jonno automation banai:
-✅ New order auto confirmation
-✅ Delivery update auto
-✅ 7 din na ele "miss you + 10% off" msg
-✅ Weekly offer broadcast
-✅ Birthday customer-er jonno free dessert offer
+On a serious note — do you send order confirmations, delivery updates, weekly offers, and birthday discounts to customers via WhatsApp?
 
-Recent ekta restaurant-e implement korar por 22% repeat orders bere geche.
+AutoFlowa builds restaurant-specific automation:
 
-Demo dekhben?
+✅ Auto order confirmation
+✅ Delivery status updates
+✅ "Miss you + 10% off" after 7 days
+✅ Weekly offer broadcasts
+✅ Birthday free dessert offers
+
+A recent restaurant client saw 22% more repeat orders after setup.
+
+5-min demo here:
 ${site}
 
-Free, koto chhoto restaurant-er o kaaj kore.`,
+Free, works for any size restaurant 🙂
+
+_Prefer Hindi or Bangla? Reply "H" or "B" — happy to switch!_`,
 }
 
 // Detect niche from lead's niche field — returns 'gym'/'salon'/etc, or null
