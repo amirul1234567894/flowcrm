@@ -140,9 +140,15 @@ export default function OutreachPage() {
       const res = await fetch('/api/outreach/generate', { method: 'POST' })
       const data = await res.json()
       if (res.ok) {
-        notify(data.skipped
-          ? `Already generated: ${data.count} items`
-          : `✅ Generated ${data.count} messages`)
+        if (data.skipped) {
+          notify(`Already generated: ${data.count} items`)
+        } else {
+          const invalid = data.invalidPhonesSkipped || 0
+          const msg = invalid > 0
+            ? `✅ Generated ${data.count} messages (${invalid} invalid phone numbers auto-skipped)`
+            : `✅ Generated ${data.count} messages`
+          notify(msg)
+        }
         fetchToday()
       } else {
         notify(data.error || 'Generate failed', 'err')
@@ -317,6 +323,29 @@ export default function OutreachPage() {
       notify('✅ Updated')
       fetchToday()
     } catch(e) { notify('Edit failed', 'err') }
+  }
+
+  // Mark this lead as "no WhatsApp" — skips this queue item AND prevents
+  // the lead from being picked again in future generates
+  const markNoWhatsApp = async (item) => {
+    if (!confirm('Mark as no WhatsApp? This lead will never be picked again.')) return
+    try {
+      // 1. Skip this queue item
+      await fetch(`/api/outreach/${item.id}`, {
+        method:  'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({ status: 'skipped' })
+      })
+      // 2. Mark lead as "Not Interested" so it's permanently excluded
+      //    (status filter prevents re-pick, and shows up properly in CRM)
+      await fetch(`/api/leads/${item.lead_id}`, {
+        method:  'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body:    JSON.stringify({ status: 'Not Interested' })
+      })
+      notify('📵 Marked as no WhatsApp — won\'t pick again')
+      fetchToday()
+    } catch(e) { notify('Mark failed', 'err') }
   }
 
   const removeOne = async (id) => {
@@ -502,6 +531,13 @@ export default function OutreachPage() {
                               ✓ Mark Sent
                             </button>
                             <button className="btn small" onClick={() => startEdit(item)}>✏️ Edit</button>
+                            <button
+                              className="btn small ghost"
+                              onClick={() => markNoWhatsApp(item)}
+                              title="Number doesn't have WhatsApp — never pick again"
+                            >
+                              📵 No WA
+                            </button>
                             <button className="btn small ghost" onClick={() => skipOne(item.id)}>Skip</button>
                             <button className="btn small ghost danger" onClick={() => removeOne(item.id)}>🗑</button>
                           </>

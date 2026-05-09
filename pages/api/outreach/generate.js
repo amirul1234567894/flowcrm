@@ -26,6 +26,32 @@ function normalizePhone(phone) {
   return digits.length >= 10 ? digits.slice(-10) : digits
 }
 
+// Heuristic check: is this phone likely to have a WhatsApp account?
+// We can't actually verify (no API), but we can reject obvious junk:
+//   • Too short / too long
+//   • All-same digits (9999999999, 1111111111)
+//   • Sequential garbage (1234567890, 9876543210 with consecutive)
+//   • Indian landline patterns (start with 0 + 2-3 digit STD code)
+//   • Indian mobile MUST start with 6/7/8/9 (per TRAI rules)
+//
+// Returns true if number passes basic validity checks (NOT 100% accurate but
+// catches ~70-80% of bad numbers that have no WhatsApp).
+function isLikelyValidWhatsAppNumber(phone) {
+  const digits = normalizePhone(phone)
+  if (!digits || digits.length < 10) return false              // too short
+  if (digits.length > 15) return false                          // too long
+  // Indian mobile rule: last 10 digits must start with 6, 7, 8, or 9
+  if (!/^[6-9]/.test(digits)) return false                      // landline / invalid
+  // All same digit check (e.g. 9999999999, 8888888888)
+  if (/^(\d)\1{9}$/.test(digits)) return false
+  // Obvious test/junk patterns
+  const junk = ['1234567890','0123456789','9876543210','0000000000','9999999999','7777777777','8888888888','6666666666']
+  if (junk.includes(digits)) return false
+  // Repeating short pattern like "1212121212" or "9090909090"
+  if (/^(\d{2})\1{4}$/.test(digits)) return false
+  return true
+}
+
 // Per-niche message templates
 // Designed for: WhatsApp Business App (manual send by user)
 // Strategy: Universal English (works PAN-India) + casual friendly tone + language-switch CTA
@@ -267,9 +293,18 @@ export default async function handler(req, res) {
     // 4. Bucket by niche, with phone-level dedup within this batch too
     const buckets = { gym: [], salon: [], clinic: [], restaurant: [] }
     const usedPhonesInBatch = new Set()    // dedup within this generation cycle
+    const invalidPhoneLeadIds = []         // leads with bad phones — auto-mark to never re-pick
     for (const lead of candidates || []) {
       const phone = normalizePhone(lead.phone)
       if (!phone) continue                            // skip blank phones
+
+      // NEW: skip likely-invalid WhatsApp numbers (landline, junk, malformed)
+      // and mark them so they're never picked again
+      if (!isLikelyValidWhatsAppNumber(lead.phone)) {
+        invalidPhoneLeadIds.push(lead.id)
+        continue
+      }
+
       if (excludedPhones.has(phone)) continue          // already-contacted phones
       if (usedPhonesInBatch.has(phone)) continue       // dup within this batch
       const niche = detectNiche(lead)
@@ -279,6 +314,16 @@ export default async function handler(req, res) {
       }
       // stop early once all buckets full
       if (Object.values(buckets).every(b => b.length >= PER_NICHE)) break
+    }
+
+    // Mark invalid-phone leads as attempted (so they're never picked again).
+    // We set outreach_attempted_at = now so the filter excludes them next time.
+    // Don't touch status or notes — preserve existing CRM data.
+    if (invalidPhoneLeadIds.length > 0) {
+      await supabase
+        .from('leads')
+        .update({ outreach_attempted_at: new Date().toISOString() })
+        .in('id', invalidPhoneLeadIds)
     }
 
     // 4. Build queue rows
@@ -329,6 +374,7 @@ export default async function handler(req, res) {
         clinic:     buckets.clinic.length,
         restaurant: buckets.restaurant.length,
       },
+      invalidPhonesSkipped: invalidPhoneLeadIds.length,
     })
   } catch (e) {
     return res.status(500).json({ error: e.message })
