@@ -34,9 +34,28 @@ const STATUS_META = {
 }
 
 // Build WhatsApp wa.me link with pre-filled message (works on mobile + desktop)
+// This may open EITHER WhatsApp or WhatsApp Business depending on phone default.
 function waLink(phone, message) {
   const cleanPhone = String(phone || '').replace(/[^0-9]/g, '')
   const encoded = encodeURIComponent(message || '')
+  return `https://wa.me/${cleanPhone}?text=${encoded}`
+}
+
+// WhatsApp Business specific link — uses Android intent URL scheme
+// Forces opening in WhatsApp Business app (package: com.whatsapp.w4b).
+// On iOS or desktop this falls back to wa.me automatically.
+function waBusinessLink(phone, message) {
+  const cleanPhone = String(phone || '').replace(/[^0-9]/g, '')
+  const encoded = encodeURIComponent(message || '')
+  // Detect if mobile Android — only Android supports intent:// scheme
+  if (typeof window !== 'undefined') {
+    const ua = navigator.userAgent || ''
+    if (/Android/i.test(ua)) {
+      // Android intent URL — explicitly targets com.whatsapp.w4b (WhatsApp Business)
+      return `intent://send?phone=${cleanPhone}&text=${encoded}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(`https://wa.me/${cleanPhone}?text=${encoded}`)};end`
+    }
+  }
+  // iOS / desktop / unknown — fall back to standard wa.me
   return `https://wa.me/${cleanPhone}?text=${encoded}`
 }
 
@@ -136,8 +155,8 @@ export default function OutreachPage() {
     for (let i = 0; i < pendingItems.length; i++) {
       if (cancelOpenRef.current) break
       const item = pendingItems[i]
-      // Open WhatsApp link
-      window.open(waLink(item.lead_phone, item.message), '_blank')
+      // Open WhatsApp Business directly (Android intent), fallback to wa.me on iOS/desktop
+      window.open(waBusinessLink(item.lead_phone, item.message), '_blank')
       // Mark as sent automatically after 5 seconds (assuming user pressed send in WhatsApp)
       // User can also manually mark via the per-card button
       await new Promise(r => setTimeout(r, 5000))
@@ -373,11 +392,20 @@ export default function OutreachPage() {
                           <>
                             <a
                               className="btn small wa"
-                              href={waLink(item.lead_phone, item.message)}
+                              href={waBusinessLink(item.lead_phone, item.message)}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
-                              💬 Open WhatsApp
+                              💼 WA Business
+                            </a>
+                            <a
+                              className="btn small wa-alt"
+                              href={waLink(item.lead_phone, item.message)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Regular WhatsApp (fallback)"
+                            >
+                              💬
                             </a>
                             <button className="btn small ok" onClick={() => markSent(item.id)}>
                               ✓ Mark Sent
@@ -450,6 +478,8 @@ export default function OutreachPage() {
       .btn.primary:hover:not(:disabled){background:#1d4ed8;color:#fff;border-color:#1d4ed8}
       .btn.wa{background:#25d366;border-color:#25d366;color:#fff;font-weight:600}
       .btn.wa:hover{background:#1da851;color:#fff;border-color:#1da851}
+      .btn.wa-alt{background:#fff;border-color:#25d366;color:#25d366;font-weight:600;padding:7px 9px}
+      .btn.wa-alt:hover:not(:disabled){background:#25d366;color:#fff}
       .btn.ok{background:#fff;border-color:var(--green);color:var(--green);font-weight:600}
       .btn.ok:hover:not(:disabled){background:var(--green);color:#fff;border-color:var(--green)}
       .btn.danger{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
