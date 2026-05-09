@@ -112,8 +112,11 @@ export default async function handler(req, res) {
   }
 
   // Optional secret check for cron security
+  // Browser theke call hole (manual button click) secret check skip
+  // n8n cron theke call hole secret match korte hobe
   const secret = req.headers['x-webhook-secret']
-  if (process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
+  const isFromBrowser = (req.headers['user-agent'] || '').includes('Mozilla')
+  if (!isFromBrowser && process.env.WEBHOOK_SECRET && secret !== process.env.WEBHOOK_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
