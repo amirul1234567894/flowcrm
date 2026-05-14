@@ -1,5 +1,12 @@
 // pages/api/whatsapp/send.js — Send WhatsApp via Green API
+//
+// v2 update: Default fallback message is now plain text (no emojis,
+// no banner). Uses SENDER_NAME env var for consistent identity across
+// outreach, follow-ups, and direct sends.
+
 import { getServiceClient } from '../../../lib/supabase'
+
+const SENDER_NAME = process.env.SENDER_NAME || 'Sami'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -19,8 +26,17 @@ export default async function handler(req, res) {
   const API_URL        = process.env.GREEN_API_URL || 'https://7107.api.greenapi.com'
   if (!INSTANCE_ID || !INSTANCE_TOKEN) return res.status(500).json({ error: 'Green API not configured' })
 
+  // Default fallback message — plain, no emoji, no banner.
+  // This is rare path (only when customMessage not provided).
+  const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in'
   const message = customMessage ||
-    `Hi ${lead.name||'there'}! 👋 Thanks for reaching out to Autoflowa.\n\nWe help ${lead.niche||'your'} businesses save 10+ hours/week with smart automation.\n\nOur team will be in touch shortly! 🚀\n\nhttps://www.autoflowa.in`
+    `Hello ${lead.name || 'there'},
+
+Thanks for reaching out. I'm ${SENDER_NAME} — I'll get back to you shortly with details on how we can help your ${lead.niche || 'business'}.
+
+If you'd like a quick look in the meantime: ${SITE}
+
+— ${SENDER_NAME}`
 
   try {
     const resp = await fetch(`${API_URL}/waInstance${INSTANCE_ID}/sendMessage/${INSTANCE_TOKEN}`, {

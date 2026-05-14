@@ -1,197 +1,347 @@
 // pages/api/outreach/followups.js
-// Returns leads that need a follow-up message today.
+// === Layer 3: AI-Powered Follow-ups for All Niches ===
+//
+// Returns leads that need a follow-up message today, with AI-generated
+// personalized messages per lead.
 //
 // FOLLOW-UP STAGES:
-//   Day 3:  Soft check-in — `leads.fu1_sent`
-//   Day 7:  Different angle (case study) — `leads.fu2_sent`
-//   Day 14: Final reach-out — `leads.fu3_sent`
+//   Day 3:  Soft check-in (fu1_sent)
+//   Day 7:  Different angle / use case (fu2_sent)
+//   Day 14: Final reach-out (fu3_sent)
 //
-// AUTO-SKIP rules — a lead is EXCLUDED from follow-ups if ANY:
-//   • Status is anything OTHER than 'New Lead' or 'Contacted'
-//     (Interested / Demo Booked / Closed Won / Not Interested → done, no more msgs)
-//   • Lead has any inbound message in `messages` table (they replied, even if status not updated)
-//   • Already past Day 14 (fu3_sent = true)
+// AUTO-SKIP rules:
+//   • Status anything other than 'New Lead' or 'Contacted' → skip
+//   • Lead has any inbound message → skip (they replied)
+//   • Already past Day 14 (fu3_sent=true) → skip
 //
-// Returns: list of follow-up items with ready-built personalized messages,
-// grouped by stage (day3 / day7 / day14).
+// AI strategy:
+//   - Same Groq-based personalization as fresh outreach
+//   - Each stage uses a DIFFERENT prompt angle so messages don't repeat
+//   - Fallback templates if AI fails
 
 import { getServiceClient } from '../../../lib/supabase'
 
-// Niche detection (same logic as generate.js — kept consistent)
-const NICHE_KEYWORDS = {
-  gym:        ['gym','gyms','fitness','crossfit','workout','akhara','bodybuilding'],
-  salon:      ['salon','salons','parlor','parlour','beauty','makeup','spa','barber','unisex'],
-  clinic:     ['clinic','clinics','hospital','dental','dentist','physio','diagnostic','dermatology','derma','skin','laser'],
-  restaurant: ['restaurant','restaurants','cafe','dhaba','biriyani','restro','catering','bakery','pizzeria','pizza','burger'],
+const SENDER_NAME = process.env.SENDER_NAME || 'Sami'
+const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in/'
+
+// Niche context (same as aiPersonalizer — kept here for follow-up specific context)
+const NICHE_CONTEXT = {
+  clinic:     { pain: 'missed appointments and no-shows', benefit: 'auto appointment reminders' },
+  hospital:   { pain: 'patient communication at scale', benefit: 'automated patient communication' },
+  dental:     { pain: 'missed appointments and recall', benefit: 'auto recall reminders' },
+  gym:        { pain: 'member churn and renewal drop-offs', benefit: 'auto renewal reminders' },
+  salon:      { pain: 'one-time customers not returning', benefit: 'auto retention messages' },
+  spa:        { pain: 'customer retention', benefit: 'auto booking and retention' },
+  restaurant: { pain: 'low repeat customers', benefit: 'auto repeat-order messages' },
+  cafe:       { pain: 'customer retention', benefit: 'loyalty messages' },
+  hotel:      { pain: 'manual booking confirmations', benefit: 'auto booking confirmations' },
+  school:     { pain: 'parent communication and fee follow-up', benefit: 'auto parent notifications' },
+  coaching:   { pain: 'class reminders and fees', benefit: 'auto reminders' },
+  ecommerce:  { pain: 'cart abandonment and retention', benefit: 'cart recovery and updates' },
+  real_estate:{ pain: 'lead follow-up gaps', benefit: 'auto lead nurturing' },
+  realtor:    { pain: 'lead follow-up gaps', benefit: 'auto lead nurturing' },
+  law:        { pain: 'client follow-up management', benefit: 'auto client reminders' },
+  lawyer:     { pain: 'client follow-up management', benefit: 'auto client reminders' },
+  travel:     { pain: 'booking follow-ups', benefit: 'auto itinerary and reminders' },
+  logistics:  { pain: 'delivery update communication', benefit: 'auto delivery updates' },
+  it:         { pain: 'long sales cycles', benefit: 'auto lead nurturing' },
+  agency:     { pain: 'client reporting cadence', benefit: 'auto client updates' },
 }
 
-function detectNiche(lead) {
-  const fields = [(lead.niche||''), (lead.name||''), (lead.notes||'')].map(s => s.toLowerCase().trim())
-  const REJECT = ['automation', 'developer', 'student', 'system', 'software', 'app', 'project', 'test']
-  if (fields[0] && REJECT.some(k => fields[0].includes(k))) return null
-  const wb = (text, w) => new RegExp(`\\b${w}\\b`, 'i').test(text)
-  const scores = { gym: 0, salon: 0, clinic: 0, restaurant: 0 }
-  const weights = [3, 2, 1]  // niche, name, notes
-  for (const [key, kws] of Object.entries(NICHE_KEYWORDS)) {
-    for (const kw of kws) {
-      fields.forEach((f, i) => { if (f && wb(f, kw)) scores[key] += weights[i] })
-    }
+function matchNicheCategory(niche, name = '', notes = '') {
+  const haystack = `${niche || ''} ${name || ''} ${notes || ''}`.toLowerCase()
+  const orderedKeys = ['dental', 'hospital', 'real_estate', 'realtor', 'lawyer', 'law', 'logistics', 'ecommerce',
+                       'coaching', 'school', 'travel', 'agency', 'salon', 'spa', 'gym', 'cafe', 'restaurant',
+                       'hotel', 'clinic', 'it']
+  for (const key of orderedKeys) {
+    const variants = key === 'real_estate' ? ['real estate', 'realty', 'realtor', 'property'] : [key]
+    if (variants.some(v => haystack.includes(v))) return key
   }
-  const max = Math.max(...Object.values(scores))
-  if (max === 0) return null
-  const matched = Object.keys(scores).filter(k => scores[k] === max)
-  return matched.length === 1 ? matched[0] : null
+  return null
 }
 
-// Follow-up message templates per niche per stage
-// NO EMOJIS — same encoding-safety reason as fresh outreach templates.
-// Each one has a different angle so it doesn't feel repetitive
-const FOLLOWUP_TEMPLATES = {
-  gym: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''},
+// === Language strategy (same as aiPersonalizer.js) ===
+const HINGLISH_NICHES = new Set([
+  'salon', 'spa', 'gym', 'restaurant', 'cafe', 'clinic', 'dental',
+  'coaching', 'school'
+])
+const ENGLISH_NICHES = new Set([
+  'hospital', 'hotel', 'law', 'lawyer', 'real_estate', 'realtor',
+  'ecommerce', 'travel', 'logistics', 'it', 'agency'
+])
 
-Following up on my message from a few days back about gym automation.
+function isIndianLead(lead) {
+  const digits = String(lead.phone || '').replace(/\D/g, '')
+  if (digits.length === 10 && /^[6-9]/.test(digits)) return true
+  if (digits.length === 12 && digits.startsWith('91') && /^[6-9]/.test(digits.slice(2))) return true
+  if (digits.length === 13 && digits.startsWith('91') && /^[6-9]/.test(digits.slice(3))) return true
+  return false
+}
 
-Just wanted to check — did you get a chance to look at it? No worries if you're busy, even a quick "later" or "not interested" helps me know what to do next.
+function pickLanguage(lead) {
+  if (!isIndianLead(lead)) return 'english'
+  const nicheCat = matchNicheCategory(lead.niche, lead.name, lead.notes)
+  if (nicheCat && ENGLISH_NICHES.has(nicheCat)) return 'english'
+  if (nicheCat && HINGLISH_NICHES.has(nicheCat)) return 'hinglish'
+  return 'hinglish'
+}
 
-In case you missed it: ${site}`,
+// === Stage-specific AI prompt builders ===
+function buildFollowupPrompt(lead, stage) {
+  const nicheCat = matchNicheCategory(lead.niche, lead.name, lead.notes)
+  const ctx = nicheCat ? NICHE_CONTEXT[nicheCat] : null
+  const nicheText = lead.niche || 'business'
+  const businessName = lead.name || 'business'
+  const language = pickLanguage(lead)
 
-    day7: (l, site) => `Hi${l.name?' '+l.name:''},
+  const ctxLine = ctx
+    ? `Their likely pain point: ${ctx.pain}. What we help with: ${ctx.benefit}.`
+    : `They run a ${nicheText} business. We help with WhatsApp automation.`
 
-One more from me, then I'll stop bothering you.
+  // Language-specific examples per stage
+  const hinglishExamples = {
+    day3: `Hinglish example for day 3 (very short, gentle):
+"Namaste [name], Sami yahan — kuch din pehle apko message kiya tha WhatsApp automation ke baare mein. Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek 'later' ya 'not interested' reply kar dijiye, mujhe pata chal jayega. — Sami"`,
 
-Quick context — we recently helped a gym save 2 hours/day on manual messaging and saw 32% more renewals in 60 days.
+    day7: `Hinglish example for day 7 (use case, no fake stats):
+"Namaste [name], ek aur message, phir bandh kar dunga. Jo small clinics ke saath kaam karta hoon, unmein common problem hai — manually appointment reminders bhejna ya call karna, jo bohot time leta hai. WhatsApp pe ye automatic ho jaata hai. Agar curious ho to 'show me' reply kar dijiye, 2-minute ka demo bhej dunga. — Sami"`,
 
-If at all curious how it'd look for your gym:
-${site}
+    day14: `Hinglish example for day 14 (polite close):
+"Namaste [name], ye mera last message hai — promise. Jab bhi ready ho, available hoon: ${SITE}. Apke business ke liye best wishes! — Sami"`
+  }
 
-If timing isn't right, just say "later" — totally fine.`,
+  const stageInstructions = {
+    day3: `This is a DAY 3 follow-up — gentle check-in only.
+- Keep it VERY short (max 50 words)
+- Reference the previous message politely
+- Acknowledge they might be busy
+- No pressure, no new pitch, no features
+- Invite a simple "later" or "not interested" reply
+- Sign off with "— ${SENDER_NAME}"`,
 
-    day14: (l, site) => `Hi${l.name?' '+l.name:''},
+    day7: `This is a DAY 7 follow-up — different angle than the initial message.
+- Keep it short (max 80 words)
+- Open with something like "One more message, then I'll stop" (or Hinglish equivalent)
+- Share ONE specific use case — be GENERIC, no named clients
+- Do NOT invent fake statistics
+- Invite a "show me" reply if they want a walkthrough
+- Sign off with "— ${SENDER_NAME}"`,
 
-Final message from me, promise.
+    day14: `This is a DAY 14 FINAL follow-up — polite close.
+- Keep it VERY short (max 40 words)
+- Say this is the last message
+- No pressure, leave door open
+- Wish them well
+- Include site link: ${SITE}
+- Sign off with "— ${SENDER_NAME}"`,
+  }
 
-If WhatsApp automation isn't a priority right now, no worries at all. The offer stands whenever you're ready:
-${site}
+  const languageInstructions = language === 'hinglish'
+    ? `LANGUAGE: HINGLISH (Hindi-English mix in Roman script, no Devanagari).
+Use "aap" (formal you), mix English business terms (WhatsApp, automation, demo) as-is.
+Greeting: "Namaste [name]," — feels personal and Indian.
+Sound like a real Indian person typing on WhatsApp, not a corporate broadcast.
 
-Wish you the best with the gym!`,
-  },
+${hinglishExamples[stage]}`
+    : `LANGUAGE: ENGLISH (professional but conversational).
+Greeting: "Hello [name],"
+Natural conversational tone.`
 
-  salon: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''},
+  return `You are writing a follow-up WhatsApp message from ${SENDER_NAME}, who runs a WhatsApp automation service for small businesses.
 
-Following up on my message about salon automation from a few days back.
+Recipient:
+- Business name: ${businessName}
+- Industry: ${nicheText}
 
-Wondering if you got a chance to look — no pressure, even a quick "later" helps me know whether to circle back.
+${ctxLine}
 
-Demo if helpful: ${site}`,
+${languageInstructions}
 
-    day7: (l, site) => `Hi${l.name?' '+l.name:''},
+${stageInstructions[stage]}
 
-One more reach-out, then I'll stop.
+STRICT RULES:
+- NO emojis
+- NO "Reply H or B" or language-switch prompts
+- NO pricing
+- NO fake statistics or named clients
+- NO buzzwords (leverage, synergy, game-changer, revolutionize)
+- NO ALL-CAPS, no excessive exclamation
+- Natural conversational tone
 
-Quick story — a salon we onboarded last month saw 47 extra bookings just from auto-reminders alone. No extra ads, no extra staff.
+Output ONLY the message text. No preamble.`
+}
 
-Want to see how? ${site}
+function cleanAIOutput(text, stage) {
+  if (!text || typeof text !== 'string') return null
+  let cleaned = text.trim()
+  cleaned = cleaned.replace(/^(here'?s? (is )?the message:?|message:?|output:?)\s*/i, '')
+  cleaned = cleaned.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+  cleaned = cleaned.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '')
+  cleaned = cleaned.replace(/[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]/gu, '')
+  cleaned = cleaned.replace(/\(\s*prefer\s+(hindi|bangla|bengali)[\s\S]{0,200}?(switch|happy)[!.]*\s*\)/gi, '')
+  cleaned = cleaned.replace(/prefer\s+(hindi|bangla|bengali)[\s\S]{0,200}?(switch|happy)[!.]*/gi, '')
+  cleaned = cleaned.replace(/reply\s+["']?[hb]["']?\s+or\s+["']?[hb]["']?[\s\S]{0,50}?(switch|happy)[!.]*/gi, '')
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
 
-If timing's off, just reply "later" — all good.`,
+  if (!cleaned.toLowerCase().includes(SENDER_NAME.toLowerCase())) {
+    cleaned += `\n\n— ${SENDER_NAME}`
+  }
 
-    day14: (l, site) => `Hi${l.name?' '+l.name:''},
+  const wordCount = cleaned.split(/\s+/).length
+  // Length limits per stage
+  const maxWords = stage === 'day14' ? 80 : stage === 'day3' ? 100 : 150
+  if (wordCount > maxWords) return null
+  if (wordCount < 10) return null
+  return cleaned
+}
 
-Last message, promise.
+function fallbackFollowup(lead, stage) {
+  const nicheCat = matchNicheCategory(lead.niche, lead.name, lead.notes)
+  const ctx = nicheCat ? NICHE_CONTEXT[nicheCat] : null
+  const language = pickLanguage(lead)
 
-If automation isn't on your radar right now, totally understand. Whenever you're ready:
-${site}
+  // ===== HINGLISH FALLBACKS =====
+  if (language === 'hinglish') {
+    const greet = lead.name ? `Namaste ${lead.name}` : 'Namaste'
 
-Best wishes for the salon!`,
-  },
+    if (stage === 'day3') {
+      return `${greet},
 
-  clinic: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''},
+${SENDER_NAME} yahan — kuch din pehle apko message kiya tha WhatsApp automation ke baare mein, bas follow-up kar raha hoon.
 
-Following up on my message about clinic automation from a few days ago.
+Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek quick "later" ya "not interested" reply kar dijiye, mujhe pata chal jayega.
 
-Did you get a chance to look? Even a quick "not now" helps me plan next steps.
+— ${SENDER_NAME}`
+    }
 
-Demo: ${site}`,
+    if (stage === 'day7') {
+      const useCase = ctx
+        ? `Jo ${lead.niche || 'businesses'} ke saath kaam karta hoon, unmein common problem hai — ${ctx.pain}. WhatsApp pe ${ctx.benefit} automatic ho jaata hai — koi staff effort nahi.`
+        : `Jo businesses ke saath kaam karta hoon, unmein manually customer messaging karna ek common problem hai. WhatsApp setup se ye automatic ho jaata hai.`
+      return `${greet},
 
-    day7: (l, site) => `Hi${l.name?' '+l.name:''},
+Ek aur message, phir bandh kar dunga — promise.
+
+${useCase}
+
+Agar curious ho to bas "show me" reply kar dijiye, 2-minute ka demo video bhej dunga.
+
+— ${SENDER_NAME}`
+    }
+
+    // day14 hinglish
+    return `${greet},
+
+Ye mera last message hai — promise.
+
+Jab bhi automation explore karna ho, available hoon:
+${SITE}
+
+Apke business ke liye best wishes!
+
+— ${SENDER_NAME}`
+  }
+
+  // ===== ENGLISH FALLBACKS =====
+  const greet = lead.name ? `Hello ${lead.name}` : 'Hello'
+
+  if (stage === 'day3') {
+    return `${greet},
+
+${SENDER_NAME} here — just following up on my message from a few days back.
+
+No pressure at all. Even a quick "later" or "not interested" helps me know whether to circle back.
+
+— ${SENDER_NAME}`
+  }
+
+  if (stage === 'day7') {
+    const useCase = ctx
+      ? `Most ${lead.niche || 'businesses'} I work with deal with ${ctx.pain}. A simple WhatsApp setup handles ${ctx.benefit} without staff effort.`
+      : `Most businesses I work with deal with manual customer messaging. A simple WhatsApp setup handles this without staff effort.`
+    return `${greet},
 
 One more from me, then I'll stop.
 
-Quick stat — clinics using our reminder system saw 60% reduction in missed appointments. Real impact for patient care + revenue.
+${useCase}
 
-If you'd like to see it: ${site}
+If you'd like a quick walkthrough, just reply "show me" and I'll send a 2-minute video.
 
-If not the right time, just reply "later" — no pressure.`,
+— ${SENDER_NAME}`
+  }
 
-    day14: (l, site) => `Hi${l.name?' '+l.name:''},
+  // day14 english
+  return `${greet},
 
-Final message from me.
-
-If automation isn't a priority now, completely understand. Available whenever:
-${site}
-
-Wishing the clinic continued success!`,
-  },
-
-  restaurant: {
-    day3: (l, site) => `Hi${l.name?' '+l.name:''},
-
-Following up on my message about restaurant automation a few days back.
-
-Did you get a chance to look? Even a quick reply helps me know what to do next.
-
-Demo: ${site}`,
-
-    day7: (l, site) => `Hi${l.name?' '+l.name:''},
-
-One more from me, then I'll stop.
-
-Quick story — a restaurant we onboarded saw 22% more repeat orders from auto WhatsApp messaging. Customers come back more often when they're remembered.
-
-If at all curious: ${site}
-
-If not now, just say "later" — all good.`,
-
-    day14: (l, site) => `Hi${l.name?' '+l.name:''},
-
-Last message, promise.
+Last message from me — promise.
 
 Whenever you're ready to explore it:
-${site}
+${SITE}
 
-Wishing the restaurant continued success!`,
-  },
+Wishing you continued success.
+
+— ${SENDER_NAME}`
 }
 
-// Generic fallback templates for leads where niche couldn't be detected
-const GENERIC_TEMPLATES = {
-  day3: (l, site) => `Hi${l.name?' '+l.name:''},
+// Generate AI follow-up for a single lead+stage
+async function generateFollowupMessage(lead, stage) {
+  const GROQ_KEY = process.env.GROQ_API_KEY
+  if (!GROQ_KEY) return { message: fallbackFollowup(lead, stage), source: 'fallback' }
 
-Following up on my message from a few days back. Did you get a chance to look at AutoFlowa?
+  try {
+    const prompt = buildFollowupPrompt(lead, stage)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
 
-No pressure — even a quick "later" or "not interested" helps me plan.
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 250,
+        temperature: 0.7,
+        messages: [
+          { role: 'system', content: 'You write short, human-sounding WhatsApp follow-up messages. No emojis, no buzzwords, no fake stats. Output only the message text.' },
+          { role: 'user', content: prompt }
+        ]
+      })
+    })
+    clearTimeout(timeoutId)
 
-Demo: ${site}`,
+    if (!resp.ok) return { message: fallbackFollowup(lead, stage), source: 'fallback' }
 
-  day7: (l, site) => `Hi${l.name?' '+l.name:''},
+    const data = await resp.json()
+    const aiText = data?.choices?.[0]?.message?.content
+    const cleaned = cleanAIOutput(aiText, stage)
 
-One more from me, then I'll stop.
+    if (!cleaned) return { message: fallbackFollowup(lead, stage), source: 'fallback' }
+    return { message: cleaned, source: 'ai' }
+  } catch (e) {
+    return { message: fallbackFollowup(lead, stage), source: 'fallback' }
+  }
+}
 
-If automation might help your business with WhatsApp messaging:
-${site}
+// Batch processing with concurrency control (Groq rate limit safety)
+async function generateBatch(items) {
+  const batchSize = 5
+  const delayMs = 2000
+  const results = []
 
-If timing isn't right, just say "later" — totally fine.`,
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const batchResults = await Promise.all(
+      batch.map(({ lead, stage }) =>
+        generateFollowupMessage(lead, stage).then(r => ({ leadId: lead.id, stage, ...r }))
+      )
+    )
+    results.push(...batchResults)
+    if (i + batchSize < items.length) {
+      await new Promise(r => setTimeout(r, delayMs))
+    }
+  }
 
-  day14: (l, site) => `Hi${l.name?' '+l.name:''},
-
-Final message, promise.
-
-The offer stands whenever you're ready:
-${site}
-
-All the best with your business!`,
+  return results
 }
 
 const daysBetween = (later, earlier) => Math.floor((later - earlier) / (1000 * 60 * 60 * 24))
@@ -201,25 +351,21 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
 
   const supabase = getServiceClient()
-  const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in/'
   const now = new Date()
 
   try {
-    // 1. Get leads who were sent at least one outreach (status moved to 'Contacted')
-    //    AND haven't completed all 3 follow-ups yet
-    //    AND status is still in active funnel (not Interested/Demo/Won/Lost)
+    // 1. Get leads in 'Contacted' status, not yet at fu3
     const { data: leads, error } = await supabase
       .from('leads')
       .select('id,name,phone,niche,notes,status,fu1_sent,fu2_sent,fu3_sent,fu1_sent_at,fu2_sent_at,fu3_sent_at,last_contact,outreach_attempted_at,updated_at')
-      .eq('status', 'Contacted')                  // only leads that received initial outreach
-      .eq('fu3_sent', false)                       // not yet at final stage
-      .not('outreach_attempted_at', 'is', null)    // outreach actually happened
+      .eq('status', 'Contacted')
+      .eq('fu3_sent', false)
+      .not('outreach_attempted_at', 'is', null)
       .limit(2000)
 
     if (error) return res.status(500).json({ error: error.message })
 
-    // 2. Get inbound messages — leads who REPLIED should auto-skip follow-ups
-    //    (even if status not manually updated)
+    // 2. Filter leads that replied (auto-skip)
     const leadIds = (leads || []).map(l => l.id)
     const repliedLeadIds = new Set()
     if (leadIds.length > 0) {
@@ -231,62 +377,73 @@ export default async function handler(req, res) {
       for (const m of inbounds || []) repliedLeadIds.add(m.lead_id)
     }
 
-    // 3. Bucket each lead into the correct follow-up stage based on time elapsed
-    const day3 = []
-    const day7 = []
-    const day14 = []
+    // 3. Bucket each lead by follow-up stage based on elapsed time
+    const stagedLeads = []  // [{ lead, stage }]
 
     for (const lead of leads || []) {
-      // SKIP if replied (auto-skip rule)
       if (repliedLeadIds.has(lead.id)) continue
-
-      // Reference time = outreach_attempted_at (when initial msg was sent)
       const sentAt = new Date(lead.outreach_attempted_at)
       const days = daysBetween(now, sentAt)
 
-      // Determine which stage this lead is at
-      // Day 14: fu2_sent done, ≥14 days since outreach
       if (lead.fu2_sent && !lead.fu3_sent && days >= 14) {
-        day14.push({ ...lead, daysOld: days, stage: 'day14' })
-      }
-      // Day 7: fu1_sent done, fu2 not, ≥7 days since outreach
-      else if (lead.fu1_sent && !lead.fu2_sent && days >= 7) {
-        day7.push({ ...lead, daysOld: days, stage: 'day7' })
-      }
-      // Day 3: fu1 not sent yet, ≥3 days since outreach
-      else if (!lead.fu1_sent && days >= 3) {
-        day3.push({ ...lead, daysOld: days, stage: 'day3' })
+        stagedLeads.push({ lead: { ...lead, daysOld: days }, stage: 'day14' })
+      } else if (lead.fu1_sent && !lead.fu2_sent && days >= 7) {
+        stagedLeads.push({ lead: { ...lead, daysOld: days }, stage: 'day7' })
+      } else if (!lead.fu1_sent && days >= 3) {
+        stagedLeads.push({ lead: { ...lead, daysOld: days }, stage: 'day3' })
       }
     }
 
-    // 4. Build response items with personalized messages
-    const buildItems = (bucket) => bucket.map(lead => {
-      const niche = detectNiche(lead) || 'generic'
-      const tpls = (niche === 'generic') ? GENERIC_TEMPLATES : FOLLOWUP_TEMPLATES[niche]
-      const message = tpls[lead.stage](lead, SITE)
-      return {
-        lead_id:    lead.id,
-        lead_name:  lead.name || 'there',
+    if (stagedLeads.length === 0) {
+      return res.status(200).json({
+        day3: [], day7: [], day14: [],
+        summary: { total: 0, day3: 0, day7: 0, day14: 0 }
+      })
+    }
+
+    // 4. Generate AI follow-ups for all staged leads (batched)
+    const results = await generateBatch(stagedLeads)
+    const resultMap = new Map(results.map(r => [`${r.leadId}_${r.stage}`, r]))
+
+    // 5. Build response with messages
+    const day3 = []
+    const day7 = []
+    const day14 = []
+    let aiCount = 0
+    let fallbackCount = 0
+
+    for (const { lead, stage } of stagedLeads) {
+      const result = resultMap.get(`${lead.id}_${stage}`)
+      if (!result) continue
+      if (result.source === 'ai') aiCount++; else fallbackCount++
+
+      const niche = lead.niche ? lead.niche.toLowerCase() : null
+      const item = {
+        lead_id: lead.id,
+        lead_name: lead.name || 'there',
         lead_phone: lead.phone,
-        niche:      niche === 'generic' ? null : niche,
-        stage:      lead.stage,
-        days_old:   lead.daysOld,
-        message,
+        niche,
+        stage,
+        days_old: lead.daysOld,
+        message: result.message,
       }
-    })
+      if (stage === 'day3') day3.push(item)
+      else if (stage === 'day7') day7.push(item)
+      else day14.push(item)
+    }
 
     return res.status(200).json({
-      day3:  buildItems(day3),
-      day7:  buildItems(day7),
-      day14: buildItems(day14),
+      day3, day7, day14,
       summary: {
         total: day3.length + day7.length + day14.length,
-        day3:  day3.length,
-        day7:  day7.length,
+        day3: day3.length,
+        day7: day7.length,
         day14: day14.length,
+        ai_generated: aiCount,
+        fallback_used: fallbackCount,
       }
     })
-  } catch(e) {
+  } catch (e) {
     return res.status(500).json({ error: e.message })
   }
 }
