@@ -24,28 +24,29 @@ import { getServiceClient } from '../../../lib/supabase'
 const SENDER_NAME = process.env.SENDER_NAME || 'Sami'
 const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in/'
 
-// Niche context (same as aiPersonalizer — kept here for follow-up specific context)
+// Niche context — broader automation services per niche, not just WhatsApp.
+// AI picks ONE relevant service per follow-up so messages stay focused.
 const NICHE_CONTEXT = {
-  clinic:     { pain: 'missed appointments and no-shows', benefit: 'auto appointment reminders' },
-  hospital:   { pain: 'patient communication at scale', benefit: 'automated patient communication' },
-  dental:     { pain: 'missed appointments and recall', benefit: 'auto recall reminders' },
-  gym:        { pain: 'member churn and renewal drop-offs', benefit: 'auto renewal reminders' },
-  salon:      { pain: 'one-time customers not returning', benefit: 'auto retention messages' },
-  spa:        { pain: 'customer retention', benefit: 'auto booking and retention' },
-  restaurant: { pain: 'low repeat customers', benefit: 'auto repeat-order messages' },
-  cafe:       { pain: 'customer retention', benefit: 'loyalty messages' },
-  hotel:      { pain: 'manual booking confirmations', benefit: 'auto booking confirmations' },
-  school:     { pain: 'parent communication and fee follow-up', benefit: 'auto parent notifications' },
-  coaching:   { pain: 'class reminders and fees', benefit: 'auto reminders' },
-  ecommerce:  { pain: 'cart abandonment and retention', benefit: 'cart recovery and updates' },
-  real_estate:{ pain: 'lead follow-up gaps', benefit: 'auto lead nurturing' },
-  realtor:    { pain: 'lead follow-up gaps', benefit: 'auto lead nurturing' },
-  law:        { pain: 'client follow-up management', benefit: 'auto client reminders' },
-  lawyer:     { pain: 'client follow-up management', benefit: 'auto client reminders' },
-  travel:     { pain: 'booking follow-ups', benefit: 'auto itinerary and reminders' },
-  logistics:  { pain: 'delivery update communication', benefit: 'auto delivery updates' },
-  it:         { pain: 'long sales cycles', benefit: 'auto lead nurturing' },
-  agency:     { pain: 'client reporting cadence', benefit: 'auto client updates' },
+  clinic:     { pain: 'missed appointments and manual scheduling',         services: 'appointment reminder automation, patient CRM, online booking' },
+  hospital:   { pain: 'patient communication overhead',                    services: 'patient communication automation, report delivery automation, dashboard reporting' },
+  dental:     { pain: 'missed appointments and recall management',         services: 'recall reminder automation, online booking, patient retention campaigns' },
+  gym:        { pain: 'member churn and renewal gaps',                     services: 'renewal reminder automation, lead nurturing, member onboarding workflows' },
+  salon:      { pain: 'one-time customers not returning',                  services: 'retention messaging, online booking automation, birthday campaigns' },
+  spa:        { pain: 'customer retention and booking management',         services: 'booking automation, retention campaigns, package renewal reminders' },
+  restaurant: { pain: 'low repeat customer rates',                         services: 'repeat-order campaigns, review collection automation, loyalty programs' },
+  cafe:       { pain: 'customer retention',                                services: 'loyalty automation, social media scheduling, retention messaging' },
+  hotel:      { pain: 'manual booking follow-ups and OTA management',      services: 'booking confirmation automation, OTA sync, review request automation' },
+  school:     { pain: 'parent communication and fee follow-up',            services: 'parent notification automation, fee reminder automation, admission inquiry follow-up' },
+  coaching:   { pain: 'class management and fee tracking',                 services: 'class reminder automation, lead nurturing, fee tracking' },
+  ecommerce:  { pain: 'cart abandonment and customer support load',        services: 'cart recovery automation, order tracking, AI support agents, retention campaigns' },
+  real_estate:{ pain: 'lead follow-up gaps and manual nurturing',          services: 'lead nurturing automation, site visit reminders, CRM integration' },
+  realtor:    { pain: 'lead follow-up gaps and manual nurturing',          services: 'lead nurturing automation, drip campaigns, CRM automation' },
+  law:        { pain: 'client follow-up and deadline tracking',            services: 'client reminder automation, document deadline alerts, intake automation' },
+  lawyer:     { pain: 'client follow-up and consultation scheduling',      services: 'client reminder automation, consultation booking, intake form automation' },
+  travel:     { pain: 'booking follow-ups and itinerary delivery',         services: 'itinerary automation, booking reminders, support automation' },
+  logistics:  { pain: 'delivery update communication',                     services: 'delivery update automation, dispatch alerts, customer notification system' },
+  it:         { pain: 'long sales cycles and lead nurturing',              services: 'lead nurturing automation, demo follow-up sequences, onboarding automation' },
+  agency:     { pain: 'client communication and manual reporting',         services: 'client update automation, reporting automation, lead generation scraping' },
 }
 
 function matchNicheCategory(niche, name = '', notes = '') {
@@ -95,13 +96,13 @@ function buildFollowupPrompt(lead, stage) {
   const language = pickLanguage(lead)
 
   const ctxLine = ctx
-    ? `Their likely pain point: ${ctx.pain}. What we help with: ${ctx.benefit}.`
-    : `They run a ${nicheText} business. We help with WhatsApp automation.`
+    ? `Their likely pain point: ${ctx.pain}. Services we offer for this: ${ctx.services}.`
+    : `They run a ${nicheText} business. We offer business automation (WhatsApp, email, CRM, lead generation, AI agents, workflow automation).`
 
   // Language-specific examples per stage
   const hinglishExamples = {
     day3: `Hinglish example for day 3 (very short, gentle):
-"Namaste [name], Sami yahan — kuch din pehle apko message kiya tha WhatsApp automation ke baare mein. Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek 'later' ya 'not interested' reply kar dijiye, mujhe pata chal jayega. — Sami"`,
+"Namaste [name], Sami yahan — kuch din pehle apko message kiya tha automation ke baare mein. Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek 'later' ya 'not interested' reply kar dijiye, mujhe pata chal jayega. — Sami"`,
 
     day7: `Hinglish example for day 7 (use case, no fake stats):
 "Namaste [name], ek aur message, phir bandh kar dunga. Jo small clinics ke saath kaam karta hoon, unmein common problem hai — manually appointment reminders bhejna ya call karna, jo bohot time leta hai. WhatsApp pe ye automatic ho jaata hai. Agar curious ho to 'show me' reply kar dijiye, 2-minute ka demo bhej dunga. — Sami"`,
@@ -147,7 +148,7 @@ ${hinglishExamples[stage]}`
 Greeting: "Hello [name],"
 Natural conversational tone.`
 
-  return `You are writing a follow-up WhatsApp message from ${SENDER_NAME}, who runs a WhatsApp automation service for small businesses.
+  return `You are writing a follow-up WhatsApp message from ${SENDER_NAME}, who runs a business automation agency. The agency builds custom automation for small businesses — WhatsApp automation, email automation, lead generation/scraping, CRM workflows, AI agents, reporting dashboards, and custom integrations.
 
 Recipient:
 - Business name: ${businessName}
@@ -199,6 +200,8 @@ function fallbackFollowup(lead, stage) {
   const nicheCat = matchNicheCategory(lead.niche, lead.name, lead.notes)
   const ctx = nicheCat ? NICHE_CONTEXT[nicheCat] : null
   const language = pickLanguage(lead)
+  // Pick first service from ctx for fallback variety
+  const firstService = ctx ? ctx.services.split(',')[0].trim() : 'workflow automation'
 
   // ===== HINGLISH FALLBACKS =====
   if (language === 'hinglish') {
@@ -207,7 +210,7 @@ function fallbackFollowup(lead, stage) {
     if (stage === 'day3') {
       return `${greet},
 
-${SENDER_NAME} yahan — kuch din pehle apko message kiya tha WhatsApp automation ke baare mein, bas follow-up kar raha hoon.
+${SENDER_NAME} yahan — kuch din pehle apko message kiya tha automation ke baare mein, bas follow-up kar raha hoon.
 
 Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek quick "later" ya "not interested" reply kar dijiye, mujhe pata chal jayega.
 
@@ -216,8 +219,8 @@ Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek quick "later" ya "not
 
     if (stage === 'day7') {
       const useCase = ctx
-        ? `Jo ${lead.niche || 'businesses'} ke saath kaam karta hoon, unmein common problem hai — ${ctx.pain}. WhatsApp pe ${ctx.benefit} automatic ho jaata hai — koi staff effort nahi.`
-        : `Jo businesses ke saath kaam karta hoon, unmein manually customer messaging karna ek common problem hai. WhatsApp setup se ye automatic ho jaata hai.`
+        ? `Jo ${lead.niche || 'businesses'} ke saath kaam karta hoon, unmein common problem hai — ${ctx.pain}. ${firstService} se ye automatic ho jaata hai — koi extra staff effort nahi.`
+        : `Jo businesses ke saath kaam karta hoon, unmein manually repetitive tasks karna ek common problem hai. Custom automation se ye sab automatic ho jaata hai.`
       return `${greet},
 
 Ek aur message, phir bandh kar dunga — promise.
@@ -248,7 +251,7 @@ Apke business ke liye best wishes!
   if (stage === 'day3') {
     return `${greet},
 
-${SENDER_NAME} here — just following up on my message from a few days back.
+${SENDER_NAME} here — just following up on my message from a few days back about business automation.
 
 No pressure at all. Even a quick "later" or "not interested" helps me know whether to circle back.
 
@@ -257,8 +260,8 @@ No pressure at all. Even a quick "later" or "not interested" helps me know wheth
 
   if (stage === 'day7') {
     const useCase = ctx
-      ? `Most ${lead.niche || 'businesses'} I work with deal with ${ctx.pain}. A simple WhatsApp setup handles ${ctx.benefit} without staff effort.`
-      : `Most businesses I work with deal with manual customer messaging. A simple WhatsApp setup handles this without staff effort.`
+      ? `Most ${lead.niche || 'businesses'} I work with deal with ${ctx.pain}. ${firstService.charAt(0).toUpperCase() + firstService.slice(1)} typically handles this without staff overhead.`
+      : `Most businesses I work with deal with manual repetitive tasks. Custom automation handles this without adding staff overhead.`
     return `${greet},
 
 One more from me, then I'll stop.

@@ -115,7 +115,11 @@ export default async function handler(req, res) {
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
 
     // 3. Fetch top-scored candidate leads from ALL niches
-    //    Fetch more than DAILY_LIMIT to account for invalid phones, dupes, rejects
+    //    Strategy: Fair distribution across niches (round-robin)
+    //    Previously: pure score-based picking caused clinic-heavy bias
+    //    (clinic has +18 niche bonus in scoring, so all top leads were clinics)
+    //    Fix: Group candidates by niche, then pick in round-robin fashion
+    //    so each niche gets equal representation per day.
     const FETCH_MULTIPLIER = 30  // fetch 30x the limit as candidate pool
     const { data: candidates, error: fetchErr } = await supabase
       .from('leads')
@@ -130,14 +134,12 @@ export default async function handler(req, res) {
 
     if (fetchErr) return res.status(500).json({ error: fetchErr.message })
 
-    // 4. Filter candidates: valid phone, no rejects, no dupes within batch
-    const selectedLeads = []
+    // 4. Filter + Group by niche (for fair round-robin distribution)
+    const candidatesByNiche = {}    // { 'clinic': [lead1, lead2...], 'salon': [...] }
     const invalidPhoneLeadIds = []
     const usedPhonesInBatch = new Set()
 
     for (const lead of candidates || []) {
-      if (selectedLeads.length >= DAILY_LIMIT) break
-
       // Reject test/automation/system entries
       if (shouldRejectLead(lead)) continue
 
@@ -154,8 +156,38 @@ export default async function handler(req, res) {
       if (excludedPhones.has(phone)) continue
       if (usedPhonesInBatch.has(phone)) continue
 
-      selectedLeads.push(lead)
+      // Group by niche (lowercased + trimmed for consistent grouping)
+      const nicheKey = (lead.niche || 'other').toLowerCase().trim()
+      if (!candidatesByNiche[nicheKey]) candidatesByNiche[nicheKey] = []
+      candidatesByNiche[nicheKey].push(lead)
       usedPhonesInBatch.add(phone)
+    }
+
+    // 5. Round-robin pick across all niches for fair distribution
+    //    Example with 12/day limit and 4 niches (clinic, salon, gym, hotel):
+    //    Pick: clinic-1, salon-1, gym-1, hotel-1, clinic-2, salon-2, gym-2, hotel-2, ...
+    //    Result: ~3 of each niche per day instead of 12 clinics
+    //
+    //    Niches with empty candidate pools are skipped, but other niches
+    //    can fill the gaps so DAILY_LIMIT is always reached if possible.
+    const selectedLeads = []
+    const nicheKeys = Object.keys(candidatesByNiche)
+    const nicheIndexes = {}   // tracks how many we've picked from each niche
+    nicheKeys.forEach(k => { nicheIndexes[k] = 0 })
+
+    while (selectedLeads.length < DAILY_LIMIT) {
+      let pickedThisRound = 0
+      for (const niche of nicheKeys) {
+        if (selectedLeads.length >= DAILY_LIMIT) break
+        const idx = nicheIndexes[niche]
+        if (idx < candidatesByNiche[niche].length) {
+          selectedLeads.push(candidatesByNiche[niche][idx])
+          nicheIndexes[niche]++
+          pickedThisRound++
+        }
+      }
+      // If no niche had anything left this round, we're out of candidates
+      if (pickedThisRound === 0) break
     }
 
     // Mark invalid phones as attempted (so we never re-pick them)

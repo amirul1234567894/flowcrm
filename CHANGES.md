@@ -1,173 +1,169 @@
-# FlowCRM v3.1 — AI Personalization + Smart Language Detection
+# FlowCRM v3.2 — Fair Niche Distribution + General Automation
 
-## Bhai, ki ki update holo (latest)
+## Bhai, eta update e ki ki holo
 
-**v3 (previous):** AI personalization, all niches, English only
-**v3.1 (now):** Same + **automatic Hinglish/English detection per lead**
+**2 ta major fix:**
+
+### 1. ✅ "All clinic" problem solved → Fair round-robin distribution
+
+**Before:** Score-based picking. Clinic er score sob theke beshi (clinic = 18 niche bonus). So daily 12 messages er sob clinic e jacche.
+
+**After:** Round-robin picking. Niche-wise group kore, ekta ekta kore pick kora hoy. Example daily 12 e:
+- 30 clinic + 15 salon + 10 gym + 8 hotel + 5 restaurant candidates ache
+- Result: 3 clinic + 3 salon + 2 gym + 2 hotel + 2 restaurant **selected**
+- Sob niche fair representation pacche
+
+### 2. ✅ WhatsApp only → General Business Automation Agency
+
+**Before:** "I do WhatsApp automation for clinics"
+
+**After:** "I build business automation systems — WhatsApp, email, lead generation, CRM workflows, AI agents, reporting dashboards, workflow automation, custom integrations"
+
+AI now picks the most relevant service per niche:
+- **Clinic** → patient CRM, appointment reminders, online booking
+- **Hospital** → report delivery automation, dashboard reporting
+- **Hotel** → OTA sync automation, booking confirmations
+- **Ecommerce** → cart recovery, AI support agents
+- **Real estate** → lead nurturing, drip campaigns, CRM integration
+- **Law firm** → document deadline alerts, client reminders
+- **Agency** → reporting automation, lead generation scraping
+- **IT company** → demo follow-up sequences, onboarding automation
+- ...and so on for all niches
+
+Each lead message will mention a service that **actually fits their business**, not just "WhatsApp automation" for everyone.
 
 ---
 
-## Smart Language Logic
+## Files Changed
 
-System automatically picks language per lead:
-
-### Indian Leads (phone starts with 91 or [6-9])
-
-| Niche Type | Language | Reasoning |
-|------------|----------|-----------|
-| **Mass-market casual** | **Hinglish** | salon, gym, restaurant, cafe, small clinic, dental, coaching, school, spa |
-| **Professional / B2B** | **English** | hospital, hotel, law firm, IT company, agency, ecommerce, real estate, travel, logistics |
-| **Unknown niche** | **Hinglish** (default) | Broader appeal across Indian businesses |
-
-### Non-Indian Leads (Future)
-
-When you add US/UK/UAE/etc leads (different country codes), system **automatically uses English**. Zero config needed.
+| File | What changed |
+|------|--------------|
+| `lib/aiPersonalizer.js` | Round-robin candidate pool, expanded NICHE_CONTEXT with multi-service options, prompt rewritten for "business automation agency" |
+| `pages/api/outreach/generate.js` | Replaced linear pick with round-robin niche distribution |
+| `pages/api/outreach/followups.js` | Same niche context expansion, "automation" framing instead of "WhatsApp" only |
+| `pages/api/whatsapp/send.js` | No change (already general) |
 
 ---
 
-## Sample Output Comparison
+## Sample Messages You Should See
 
-### Indian Clinic (Hinglish):
+### Clinic (Hinglish):
 ```
 Namaste Skin Square Clinic,
 
-Main Sami hoon — chhote clinics ke liye WhatsApp pe appointment 
-reminders aur patient communication automate karta hoon.
+Main Sami hoon — chhote businesses ke liye automation systems banata hoon.
 
-Aksar clinics mein appointment confirm karne ke liye manually 
-call karna padta hai, jo bohot time leta hai. WhatsApp pe ek 
-simple setup se ye sab automatic ho jaata hai.
+Aksar clinics mein appointment reminders aur patient follow-up manually 
+hota hai, jo time leta hai. Ek simple appointment reminder automation 
+se ye sab automatic ho jaata hai — koi staff effort nahi.
 
-Agar interested ho to ek 2-minute ka demo video bhej sakta hoon. 
-Bas "yes" reply kar dijiye.
-
-— Sami
-```
-
-### Indian Hospital (English):
-```
-Hello Apollo Hospital,
-
-I'm Sami — I help hospitals streamline patient communication 
-through WhatsApp automation.
-
-Most hospitals deal with patient communication at scale — 
-appointments, reminders, follow-up reports — all of which 
-require significant manual effort. WhatsApp automation can 
-handle most of this seamlessly.
-
-If you'd like to see how it could work for your hospital, 
-reply "yes" and I'll send a 2-minute walkthrough.
+Agar interested ho to 2-minute ka demo bhej sakta hoon. Bas "yes" reply 
+kar dijiye.
 
 — Sami
 ```
 
-### US Lead (English):
+### Hotel (English):
 ```
-Hello [Business],
-I'm Sami — I help businesses set up WhatsApp automation...
+Hello Hotel Heritage,
+
+I'm Sami — I build automation systems for hospitality businesses. 
+This includes OTA sync, booking confirmations, pre-arrival messaging, 
+and review request automation.
+
+Most hotels deal with manual OTA management and follow-up overhead. 
+An OTA sync automation cuts this down significantly.
+
+If you'd want a 2-minute walkthrough, reply "yes" and I'll share.
+
 — Sami
 ```
 
----
-
-## Files Updated (4 files)
-
-1. **`lib/aiPersonalizer.js`** — Added `pickLanguage()` + Hinglish prompts + bilingual fallbacks
-2. **`pages/api/outreach/generate.js`** — No change (already uses aiPersonalizer)
-3. **`pages/api/outreach/followups.js`** — Same language logic + Hinglish followup prompts/fallbacks
-4. **`pages/api/whatsapp/send.js`** — Same as v3
-
----
-
-## Required Env Vars (no change from v3)
-
+### Real Estate Agent (Hinglish):
 ```
-GROQ_API_KEY=gsk_xxx_tomar_groq_key
-SENDER_NAME=Sami
-DAILY_OUTREACH_LIMIT=12
+Namaste Sharma Realty,
+
+Main Sami hoon — small businesses ke liye automation systems banata hoon.
+
+Real estate mein common problem hai — leads aate hain, but manually 
+follow-up karna mushkil hota hai. Ek lead nurturing automation se 
+sare leads automatic nurture hote hain, kuch lose nahi hota.
+
+2-minute ka demo bhej sakta hoon. "yes" reply kar dijiye.
+
+— Sami
 ```
 
-Get Groq key (FREE): https://console.groq.com
+Notice: Each message mentions a **different service** based on the business type.
 
 ---
 
 ## Deploy Steps
 
-1. **Files replace koro** local CRM e (4 files from zip)
-2. **Vercel env vars** add koro (GROQ_API_KEY mandatory)
-3. **Old pending delete:**
-   ```sql
-   DELETE FROM outreach_queue WHERE status = 'pending';
-   ```
-4. **Git push** → Vercel auto-deploy
-5. **Test:** Generate → check message language matches expected (clinic=Hinglish, hospital=English)
+### 1. Files replace koro
+4 ta file overwrite koro:
+- `lib/aiPersonalizer.js`
+- `pages/api/outreach/generate.js`
+- `pages/api/outreach/followups.js`
+- `pages/api/whatsapp/send.js` (jodi v3 theke o purono hoy)
 
----
-
-## Important Bhai
-
-### A. Test Hinglish messages carefully
-
-Hinglish AI generate korar por **2-3 ta msg manually pore dekho**:
-- Natural feel hocche?
-- Spelling weird na?
-- "Aap" use korche (na "tu/tum")?
-- "Main", "mera" sahi place e?
-
-AI 95% time bhalo korbe, but 5% time weird Hinglish bana te pare. Manual review = safe.
-
-### B. Customize language rules
-
-Jodi tomar mone hoy clinic English e better, ba IT company Hinglish e better — `lib/aiPersonalizer.js` er top e ei 2 ta set edit koro:
-
-```javascript
-const HINGLISH_NICHES = new Set([
-  'salon', 'spa', 'gym', 'restaurant', 'cafe', 'clinic', 'dental',
-  'coaching', 'school'
-])
-const ENGLISH_NICHES = new Set([
-  'hospital', 'hotel', 'law', 'lawyer', 'real_estate', 'realtor',
-  'ecommerce', 'travel', 'logistics', 'it', 'agency'
-])
+### 2. Old pending messages delete koro
+Supabase SQL Editor e:
+```sql
+DELETE FROM outreach_queue WHERE status = 'pending';
 ```
 
-Niche move kore dao chosen set e.
+Eta important - old "clinic only" messages clean kore debe.
 
-### C. Future country expansion
+### 3. Git push
+```bash
+git add .
+git commit -m "v3.2: fair niche distribution + general automation"
+git push origin main
+```
 
-Jab tumi US/UK/UAE leads add korbe (different country code), code automatically English use korbe. **Kichu change korte hobe na.**
+### 4. Vercel auto-deploys
+Wait 2-3 min, deploy complete hobe.
 
-Bhabishyote jodi tumi Spanish, French, ba Arabic leads target koro - **bolio**, ami language detection extend kore debo:
-- Phone country code → language map
-- Lead.country field support
-- Multi-language fallback templates
-
----
-
-## Performance & Cost
-
-- **Groq API speed:** ~500ms per request
-- **12 messages = ~15 seconds** total (with batching)
-- **Cost:** $0 (Groq free tier - 14,400/day)
-- **Bilingual handling:** No extra cost (same model handles both languages)
-
----
-
-## Quick Reference Table
-
-| Lead Niche | Lead Country | → Language |
-|------------|--------------|-----------|
-| Clinic | India | Hinglish |
-| Hospital | India | English |
-| Salon | India | Hinglish |
-| Hotel | India | English |
-| Law firm | India | English |
-| Restaurant | India | Hinglish |
-| IT company | India | English |
-| Gym | India | Hinglish |
-| Anything | USA/UK/UAE | English |
+### 5. Test koro
+- CRM e jao
+- "Generate Today's Outreach" click koro
+- Generated messages dekho - **distribution check koro**:
+  - Sob clinic na to? Different niche ashche?
+  - Each lead er service mention different ache?
 
 ---
 
-— v3.1 with smart language detection: Done
+## Important Notes
+
+### Round-robin order
+
+Niches alphabetical order e cycle hoy (jevabe JavaScript object keys order kore). Day-to-day same order, but **leads different** karon previous selections excluded.
+
+Example pick pattern:
+- Round 1: clinic, gym, hotel, restaurant, salon
+- Round 2: clinic, gym, hotel, restaurant, salon
+- Total 12 = 3 of first 2 niches + 2 of next 3 niches (approximately)
+
+### Aro fine-tuning chao?
+
+Tumi jodi specific niche ke prioritize korte chao (e.g. "clinic 5, others spread"), bolio - ami "weighted round-robin" implement kore debo. Eta simpler version ekhon - **equal fairness**.
+
+### AI variation in services
+
+AI prompt e bolechi "pick ONE specific service per message". So:
+- Lead 1 clinic → mentions "appointment reminders"
+- Lead 2 clinic → mentions "online booking"
+- Lead 3 clinic → mentions "patient CRM"
+
+Same niche, different service per message = **no template feel**.
+
+---
+
+## Critical Reminder
+
+**Real proof ekhono nei.** AI prompt strict instruction ache "no fake stats/clients". But tomar **ekta clinic e free setup koro**, real testimonial nilei AI prompt update kore real numbers inject korbo. Eta tomar response rate 2-3x kore dibe.
+
+---
+
+— v3.2 done. Test koro, problem ele bolio.
