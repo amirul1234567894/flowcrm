@@ -5,6 +5,7 @@
 // outreach, follow-ups, and direct sends.
 
 import { getServiceClient } from '../../../lib/supabase'
+import { toWhatsAppNumber } from '../../../lib/phone'
 
 const SENDER_NAME = process.env.SENDER_NAME || 'Sami'
 
@@ -17,9 +18,8 @@ export default async function handler(req, res) {
   const { data: lead } = await supabase.from('leads').select('*').eq('id', lead_id).single()
   if (!lead) return res.status(404).json({ error: 'Lead not found' })
 
-  const phone = lead.phone?.replace(/\D/g, '')
-  if (!phone || phone.length < 10) return res.status(400).json({ error: 'Invalid phone' })
-  const formatted = phone.startsWith('91') && phone.length === 12 ? phone : '91' + phone.slice(-10)
+  const formatted = toWhatsAppNumber(lead.phone)
+  if (!formatted || formatted.length < 10) return res.status(400).json({ error: 'Invalid phone' })
 
   const INSTANCE_ID    = process.env.GREEN_API_INSTANCE_ID
   const INSTANCE_TOKEN = process.env.GREEN_API_TOKEN

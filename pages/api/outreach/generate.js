@@ -17,27 +17,7 @@
 
 import { getServiceClient } from '../../../lib/supabase'
 import { generateMessagesForLeads } from '../../../lib/aiPersonalizer'
-
-function normalizePhone(phone) {
-  if (!phone) return ''
-  const digits = String(phone).replace(/\D/g, '')
-  return digits.length >= 10 ? digits.slice(-10) : digits
-}
-
-function isLikelyValidWhatsAppNumber(phone) {
-  const digits = normalizePhone(phone)
-  if (!digits || digits.length < 10) return false
-  if (digits.length > 15) return false
-  if (!/^[6-9]/.test(digits)) return false
-  if (/^(\d)\1{9}$/.test(digits)) return false
-  const exactJunk = new Set([
-    '0000000000','1111111111','2222222222','3333333333','4444444444',
-    '5555555555','6666666666','7777777777','8888888888','9999999999',
-    '1234567890','9876543210','0123456789'
-  ])
-  if (exactJunk.has(digits)) return false
-  return true
-}
+import { phoneKey, isValidWhatsAppNumber } from '../../../lib/phone'
 
 // Reject leads whose 'niche' field looks like a non-business (e.g. test data,
 // automation projects, students, developers). These are usually leads about
@@ -99,7 +79,7 @@ export default async function handler(req, res) {
       .from('outreach_queue')
       .select('lead_phone')
     const queuedPhoneSet = new Set(
-      (queuedPhones || []).map(r => normalizePhone(r.lead_phone))
+      (queuedPhones || []).map(r => phoneKey(r.lead_phone))
     )
 
     const { data: contactedLeads } = await supabase
@@ -109,7 +89,7 @@ export default async function handler(req, res) {
       .neq('phone', '')
       .neq('status', 'New Lead')
     const contactedPhoneSet = new Set(
-      (contactedLeads || []).map(r => normalizePhone(r.phone))
+      (contactedLeads || []).map(r => phoneKey(r.phone))
     )
 
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
@@ -143,11 +123,11 @@ export default async function handler(req, res) {
       // Reject test/automation/system entries
       if (shouldRejectLead(lead)) continue
 
-      const phone = normalizePhone(lead.phone)
+      const phone = phoneKey(lead.phone)
       if (!phone) continue
 
       // Invalid phone → mark to skip permanently
-      if (!isLikelyValidWhatsAppNumber(lead.phone)) {
+      if (!isValidWhatsAppNumber(lead.phone)) {
         invalidPhoneLeadIds.push(lead.id)
         continue
       }
