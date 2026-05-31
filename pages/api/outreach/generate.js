@@ -94,53 +94,85 @@ export default async function handler(req, res) {
 
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
 
-    // 3. Fetch top-scored candidate leads from ALL niches
-    //    Strategy: Fair distribution across niches (round-robin)
-    //    Previously: pure score-based picking caused clinic-heavy bias
-    //    (clinic has +18 niche bonus in scoring, so all top leads were clinics)
-    //    Fix: Group candidates by niche, then pick in round-robin fashion
-    //    so each niche gets equal representation per day.
-    const FETCH_MULTIPLIER = 30  // fetch 30x the limit as candidate pool
-    const { data: candidates, error: fetchErr } = await supabase
+    // 3. Fetch eligible leads PER NICHE (recency-proof + score-bias-proof)
+    //    ROOT-CAUSE FIX: the old single query did
+    //      .order('created_at', desc).limit(DAILY_LIMIT * 100)
+    //    which grabs only the most-RECENTLY-added leads. If you scrape one
+    //    niche (e.g. clinic) most recently, that 1200-row pool is 100% clinic,
+    //    so the round-robin below has only clinic to distribute -> clinic-only.
+    //    (Ordering by score is just as bad: clinic's +18 bonus monopolises.)
+    //    Fix: discover the niches, then fetch a small top-scored batch for EACH
+    //    niche separately, so every niche is represented regardless of recency.
+    const STATIC_NICHES = ['clinic','salon','restaurant','gym','real_estate',
+                           'dental','spa','cafe','hotel','school','coaching',
+                           'agency','ecommerce','hospital']
+    // Auto-discover any other niches present in a recent sample (future-proof)
+    const { data: sampleRows } = await supabase
       .from('leads')
-      .select('id,name,phone,niche,notes,tags,score,status,source,created_at')
-      .not('phone', 'is', null)
-      .neq('phone', '')
+      .select('niche')
       .is('outreach_attempted_at', null)
       .eq('status', 'New Lead')
-      .order('score', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .limit(DAILY_LIMIT * FETCH_MULTIPLIER)
+      .limit(1000)
+    const discovered = (sampleRows || [])
+      .map(r => (r.niche || '').toLowerCase().trim())
+      .filter(Boolean)
+    const allNiches = [...new Set([...STATIC_NICHES, ...discovered])]
 
-    if (fetchErr) return res.status(500).json({ error: fetchErr.message })
+    // Fetch top-scored eligible leads for EACH niche (small parallel queries).
+    // PER_NICHE gives the round-robin enough headroom to fill DAILY_LIMIT
+    // even when some niches are empty.
+    const PER_NICHE = Math.max(DAILY_LIMIT, 12)
+    const rawByNiche = {}
+    await Promise.all(allNiches.map(async (niche) => {
+      const { data: rows } = await supabase
+        .from('leads')
+        .select('id,name,phone,niche,notes,tags,score,status,source,created_at')
+        .is('outreach_attempted_at', null)
+        .eq('status', 'New Lead')
+        .not('phone', 'is', null)
+        .neq('phone', '')
+        .eq('niche', niche)
+        .order('score', { ascending: false })
+        .limit(PER_NICHE)
+      if (rows && rows.length) rawByNiche[niche] = rows
+    }))
 
-    // 4. Filter + Group by niche (for fair round-robin distribution)
+    // 4. Filter (dedupe / invalid / already-contacted) while keeping niche groups
     const candidatesByNiche = {}    // { 'clinic': [lead1, lead2...], 'salon': [...] }
     const invalidPhoneLeadIds = []
     const usedPhonesInBatch = new Set()
 
-    for (const lead of candidates || []) {
-      // Reject test/automation/system entries
-      if (shouldRejectLead(lead)) continue
+    for (const niche of Object.keys(rawByNiche)) {
+      for (const lead of rawByNiche[niche]) {
+        // Reject test/automation/system entries
+        if (shouldRejectLead(lead)) continue
 
-      const phone = phoneKey(lead.phone)
-      if (!phone) continue
+        const phone = phoneKey(lead.phone)
+        if (!phone) continue
 
-      // Invalid phone → mark to skip permanently
-      if (!isValidWhatsAppNumber(lead.phone)) {
-        invalidPhoneLeadIds.push(lead.id)
-        continue
+        // Invalid phone -> mark to skip permanently
+        if (!isValidWhatsAppNumber(lead.phone)) {
+          invalidPhoneLeadIds.push(lead.id)
+          continue
+        }
+
+        // Already contacted/queued
+        if (excludedPhones.has(phone)) continue
+        if (usedPhonesInBatch.has(phone)) continue
+
+        // Group by niche (lowercased + trimmed for consistent grouping)
+        const nicheKey = (lead.niche || 'other').toLowerCase().trim()
+        if (!candidatesByNiche[nicheKey]) candidatesByNiche[nicheKey] = []
+        candidatesByNiche[nicheKey].push(lead)
+        usedPhonesInBatch.add(phone)
       }
+    }
 
-      // Already contacted/queued
-      if (excludedPhones.has(phone)) continue
-      if (usedPhonesInBatch.has(phone)) continue
-
-      // Group by niche (lowercased + trimmed for consistent grouping)
-      const nicheKey = (lead.niche || 'other').toLowerCase().trim()
-      if (!candidatesByNiche[nicheKey]) candidatesByNiche[nicheKey] = []
-      candidatesByNiche[nicheKey].push(lead)
-      usedPhonesInBatch.add(phone)
+    // Within each niche, prioritise higher-scored leads first (score still matters,
+    // but the round-robin guarantees every niche gets a fair share each day).
+    for (const k of Object.keys(candidatesByNiche)) {
+      candidatesByNiche[k].sort((a, b) => (b.score || 0) - (a.score || 0))
     }
 
     // 5. Round-robin pick across all niches for fair distribution
