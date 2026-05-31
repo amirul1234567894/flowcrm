@@ -24,6 +24,19 @@ const NICHE_META = {
   salon:      { icon: '💇',  label: 'Salon',      color: '#db2777' },
   clinic:     { icon: '🏥',  label: 'Clinic',     color: '#0891b2' },
   restaurant: { icon: '🍽️', label: 'Restaurant', color: '#d97706' },
+  real_estate:{ icon: '🏠',  label: 'Real Estate', color: '#7c3aed' },
+  hotel:      { icon: '🏨',  label: 'Hotel',      color: '#0d9488' },
+  school:     { icon: '🎓',  label: 'School',     color: '#2563eb' },
+  spa:        { icon: '💆',  label: 'Spa',        color: '#be185d' },
+  cafe:       { icon: '☕',  label: 'Cafe',       color: '#b45309' },
+  dental:     { icon: '🦷',  label: 'Dental',     color: '#0e7490' },
+}
+
+// Fallback meta for any niche not explicitly listed above — so a brand-new
+// niche still renders with a clean title-cased label instead of vanishing.
+function defaultNicheMeta(niche) {
+  const label = String(niche || 'Other').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  return { icon: '📁', label, color: '#475569' }
 }
 
 const STATUS_META = {
@@ -361,9 +374,12 @@ export default function OutreachPage() {
   if (!authed) return null
 
   // Group items by niche
-  const grouped = { gym: [], salon: [], clinic: [], restaurant: [] }
+  // Group by WHATEVER niche actually appears — never drop a niche silently.
+  const grouped = {}
   for (const item of items) {
-    if (grouped[item.niche]) grouped[item.niche].push(item)
+    const key = (item.niche || 'other').toLowerCase().trim()
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(item)
   }
 
   const today = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })
@@ -475,13 +491,14 @@ export default function OutreachPage() {
           </div>
         )}
 
-        {Object.entries(NICHE_META).map(([niche, meta]) => {
+        {Object.keys(grouped).sort().map((niche) => {
+          const meta = NICHE_META[niche] || defaultNicheMeta(niche)
           const fullList = grouped[niche] || []
           // Apply filter — when 'all', show everything; otherwise only matching status
           const list = filter === 'all'
             ? fullList
             : fullList.filter(i => i.status === filter)
-          const open  = openSection[niche]
+          const open  = openSection[niche] !== false
           const count = list.length
           const totalInNiche = fullList.length
           const sent  = fullList.filter(i => i.status === 'sent').length

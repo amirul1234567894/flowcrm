@@ -25,12 +25,11 @@ export default async function handler(req, res) {
     sent:    items.filter(i => i.status === 'sent').length,
     skipped: items.filter(i => i.status === 'skipped').length,
     failed:  items.filter(i => i.status === 'failed').length,
-    byNiche: {
-      gym:        items.filter(i => i.niche === 'gym').length,
-      salon:      items.filter(i => i.niche === 'salon').length,
-      clinic:     items.filter(i => i.niche === 'clinic').length,
-      restaurant: items.filter(i => i.niche === 'restaurant').length,
-    }
+    byNiche: items.reduce((acc, i) => {
+      const k = (i.niche || 'other').toLowerCase().trim()
+      acc[k] = (acc[k] || 0) + 1
+      return acc
+    }, {}),
   }
 
   res.setHeader('Cache-Control', 'no-store')
