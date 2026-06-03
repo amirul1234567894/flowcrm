@@ -32,7 +32,14 @@ export default async function handler(req, res) {
       .range(from, to)
 
     // Optional filters
-    if (status)    q = q.eq('status', status)
+    // Archived leads are out of the active pipeline — hide them by default so
+    // they don't inflate Total Leads / Hot / Warm counts or the dashboard list.
+    // To view them explicitly, pass ?status=Archived (or ?include_archived=true).
+    if (status) {
+      q = q.eq('status', status)
+    } else if (req.query.include_archived !== 'true') {
+      q = q.neq('status', 'Archived')
+    }
     if (source)    q = q.eq('source', source)
     if (niche)     q = q.ilike('niche', `%${niche}%`)
     if (min_score) q = q.gte('score', parseInt(min_score))

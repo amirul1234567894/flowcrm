@@ -41,7 +41,7 @@ export default async function handler(req, res) {
   const { data: leads, error } = await supabase
     .from('leads')
     .select(FU_COLUMNS)
-    .not('status', 'in', '("Closed Won","Not Interested")')
+    .not('status', 'in', '("Closed Won","Not Interested","Archived")')
     .eq('fu3_sent', false)               // day-7 follow-up still pending
     .gte('created_at', minDate)
     .lte('created_at', maxDate)

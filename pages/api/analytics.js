@@ -26,7 +26,9 @@ export default async function handler(req, res) {
       .limit(50000)
     if (error) return res.status(500).json({ error: error.message })
 
-    const all = data || []
+    // Exclude Archived leads — they're out of the active pipeline and should not
+    // inflate totals, score buckets, or the follow-up funnel.
+    const all = (data || []).filter(l => l.status !== 'Archived')
     // Recent slice computed in-memory (avoids 2nd round-trip)
     const recent = all.filter(l => l.created_at && new Date(l.created_at).getTime() >= sinceMs)
     const funnel = all   // funnel uses the same dataset

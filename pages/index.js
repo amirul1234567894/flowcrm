@@ -213,7 +213,7 @@ export default function CRM() {
   })
 
   // Follow-up buckets
-  const fuLeads = leads.filter(l=>!['Closed Won','Not Interested'].includes(l.status))
+  const fuLeads = leads.filter(l=>!['Closed Won','Not Interested','Archived'].includes(l.status))
   const fu1Pending = fuLeads.filter(l=>!l.fu1_sent && daysSince(l.created_at)>=1)
   const fu2Pending = fuLeads.filter(l=>l.fu1_sent && !l.fu2_sent && daysSince(l.created_at)>=3)
   const fu3Pending = fuLeads.filter(l=>l.fu2_sent && !l.fu3_sent && daysSince(l.created_at)>=7)
