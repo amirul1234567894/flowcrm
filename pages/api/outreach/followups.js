@@ -80,11 +80,8 @@ function isIndianLead(lead) {
 }
 
 function pickLanguage(lead) {
-  if (!isIndianLead(lead)) return 'english'
-  const nicheCat = matchNicheCategory(lead.niche, lead.name, lead.notes)
-  if (nicheCat && ENGLISH_NICHES.has(nicheCat)) return 'english'
-  if (nicheCat && HINGLISH_NICHES.has(nicheCat)) return 'hinglish'
-  return 'hinglish'
+  // FORCED ENGLISH: all generated messages are in English.
+  return 'english'
 }
 
 // === Stage-specific AI prompt builders ===
