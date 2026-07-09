@@ -1,32 +1,27 @@
 // pages/api/outreach/generate.js
-// === Layer 3: AI-Powered Outreach Generator ===
+// === Layer 3: AI-Powered All-Niche Outreach Generator ===
 //
-// Daily cron (n8n) ekhane call kore — picks top N leads by score,
+// Daily cron (n8n) ekhane call kore — picks top N leads by score (any niche),
 // generates AI-personalized message for each using Groq, stores in outreach_queue.
 //
-// === STRATEGY (v4 - 2026 update) ===
-//   ONLY two niches now:
-//     1. clinic       -> PRIORITY 1 (main focus)
-//     2. real estate  -> PRIORITY 2
-//   All other niches are ignored. Round-robin picks clinic first each round,
-//   then real estate, so clinic always fills up before real estate.
+// === STRATEGY (v3 - 2026 update) ===
+// Previously locked to 4 niches (clinic/gym/salon/restaurant) with hardcoded
+// templates. Now:
+//   1. Pulls top-scored leads from ALL niches (uses leadScoring.js scores)
+//   2. AI generates personalized message per-lead via Groq API
+//   3. Fallback templates kick in if AI fails (no broken pipeline)
+//   4. Configurable daily limit via env (DAILY_OUTREACH_LIMIT, default 12)
 //
-// NOTE: This file ONLY builds the draft queue. It does NOT send anything.
-//       Actual sending happens in pages/api/whatsapp/send.js. As long as you
-//       don't trigger that send endpoint/cron, no message goes out to anyone.
+// IMPORTANT: Groq API key (GROQ_API_KEY) is required for AI generation.
+// Without it, falls back to generic templates (still better than v1).
 
 import { getServiceClient } from '../../../lib/supabase'
 import { generateMessagesForLeads } from '../../../lib/aiPersonalizer'
 import { phoneKey, isValidWhatsAppNumber } from '../../../lib/phone'
 
-// === NICHE CONFIG (single source of truth) ===
-// Only these niches are allowed. Order = priority (first = highest).
-// Both spellings of real estate are covered so nothing slips through.
-const ALLOWED_NICHES = ['clinic', 'real estate', 'real_estate']
-const PRIORITY = ['clinic', 'real estate', 'real_estate']
-
-// Reject leads whose 'niche' field looks like a non-business (test data,
-// automation projects, students, developers).
+// Reject leads whose 'niche' field looks like a non-business (e.g. test data,
+// automation projects, students, developers). These are usually leads about
+// AutoFlowa itself, not actual customer-businesses.
 function shouldRejectLead(lead) {
   const niche = (lead.niche || '').toLowerCase()
   const REJECT_KEYWORDS = ['automation', 'developer', 'student', 'system', 'software',
@@ -50,6 +45,8 @@ export default async function handler(req, res) {
   const today = new Date().toISOString().slice(0,10)
 
   // === DAILY LIMIT (env-configurable) ===
+  // Default 12/day. Increase carefully — Groq free tier = 14,400 req/day,
+  // but you also need WhatsApp send capacity manually.
   const DAILY_LIMIT = parseInt(process.env.DAILY_OUTREACH_LIMIT || '12', 10)
 
   try {
@@ -76,6 +73,8 @@ export default async function handler(req, res) {
     }
 
     // 2. Build phone exclusion list (DUPLICATE PREVENTION)
+    //    Excludes phones that have ever been queued OR
+    //    whose lead status is beyond 'New Lead'.
     const { data: queuedPhones } = await supabase
       .from('outreach_queue')
       .select('lead_phone')
@@ -95,10 +94,34 @@ export default async function handler(req, res) {
 
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
 
-    // 3. Fetch eligible leads PER NICHE — locked to ALLOWED_NICHES only.
-    //    No auto-discovery, so no other niche can leak in.
-    const allNiches = [...ALLOWED_NICHES]
+    // 3. Fetch eligible leads PER NICHE (recency-proof + score-bias-proof)
+    //    ROOT-CAUSE FIX: the old single query did
+    //      .order('created_at', desc).limit(DAILY_LIMIT * 100)
+    //    which grabs only the most-RECENTLY-added leads. If you scrape one
+    //    niche (e.g. clinic) most recently, that 1200-row pool is 100% clinic,
+    //    so the round-robin below has only clinic to distribute -> clinic-only.
+    //    (Ordering by score is just as bad: clinic's +18 bonus monopolises.)
+    //    Fix: discover the niches, then fetch a small top-scored batch for EACH
+    //    niche separately, so every niche is represented regardless of recency.
+    const STATIC_NICHES = ['clinic','salon','restaurant','gym','real_estate',
+                           'dental','spa','cafe','hotel','school','coaching',
+                           'agency','ecommerce','hospital']
+    // Auto-discover any other niches present in a recent sample (future-proof)
+    const { data: sampleRows } = await supabase
+      .from('leads')
+      .select('niche')
+      .is('outreach_attempted_at', null)
+      .eq('status', 'New Lead')
+      .order('created_at', { ascending: false })
+      .limit(1000)
+    const discovered = (sampleRows || [])
+      .map(r => (r.niche || '').toLowerCase().trim())
+      .filter(Boolean)
+    const allNiches = [...new Set([...STATIC_NICHES, ...discovered])]
 
+    // Fetch top-scored eligible leads for EACH niche (small parallel queries).
+    // PER_NICHE gives the round-robin enough headroom to fill DAILY_LIMIT
+    // even when some niches are empty.
     const PER_NICHE = Math.max(DAILY_LIMIT, 12)
     const rawByNiche = {}
     await Promise.all(allNiches.map(async (niche) => {
@@ -116,47 +139,52 @@ export default async function handler(req, res) {
     }))
 
     // 4. Filter (dedupe / invalid / already-contacted) while keeping niche groups
-    const candidatesByNiche = {}
+    const candidatesByNiche = {}    // { 'clinic': [lead1, lead2...], 'salon': [...] }
     const invalidPhoneLeadIds = []
     const usedPhonesInBatch = new Set()
 
     for (const niche of Object.keys(rawByNiche)) {
       for (const lead of rawByNiche[niche]) {
+        // Reject test/automation/system entries
         if (shouldRejectLead(lead)) continue
 
         const phone = phoneKey(lead.phone)
         if (!phone) continue
 
+        // Invalid phone -> mark to skip permanently
         if (!isValidWhatsAppNumber(lead.phone)) {
           invalidPhoneLeadIds.push(lead.id)
           continue
         }
 
+        // Already contacted/queued
         if (excludedPhones.has(phone)) continue
         if (usedPhonesInBatch.has(phone)) continue
 
+        // Group by niche (lowercased + trimmed for consistent grouping)
         const nicheKey = (lead.niche || 'other').toLowerCase().trim()
-        // Extra guard: only keep allowed niches
-        if (!ALLOWED_NICHES.includes(nicheKey)) continue
-
         if (!candidatesByNiche[nicheKey]) candidatesByNiche[nicheKey] = []
         candidatesByNiche[nicheKey].push(lead)
         usedPhonesInBatch.add(phone)
       }
     }
 
-    // Within each niche, higher-scored leads first
+    // Within each niche, prioritise higher-scored leads first (score still matters,
+    // but the round-robin guarantees every niche gets a fair share each day).
     for (const k of Object.keys(candidatesByNiche)) {
       candidatesByNiche[k].sort((a, b) => (b.score || 0) - (a.score || 0))
     }
 
-    // 5. Round-robin pick — but ORDERED by priority (clinic first, real estate second)
+    // 5. Round-robin pick across all niches for fair distribution
+    //    Example with 12/day limit and 4 niches (clinic, salon, gym, hotel):
+    //    Pick: clinic-1, salon-1, gym-1, hotel-1, clinic-2, salon-2, gym-2, hotel-2, ...
+    //    Result: ~3 of each niche per day instead of 12 clinics
+    //
+    //    Niches with empty candidate pools are skipped, but other niches
+    //    can fill the gaps so DAILY_LIMIT is always reached if possible.
     const selectedLeads = []
-    const nicheKeys = Object.keys(candidatesByNiche).sort((a, b) => {
-      const ia = PRIORITY.indexOf(a); const ib = PRIORITY.indexOf(b)
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)
-    })
-    const nicheIndexes = {}
+    const nicheKeys = Object.keys(candidatesByNiche)
+    const nicheIndexes = {}   // tracks how many we've picked from each niche
     nicheKeys.forEach(k => { nicheIndexes[k] = 0 })
 
     while (selectedLeads.length < DAILY_LIMIT) {
@@ -170,10 +198,11 @@ export default async function handler(req, res) {
           pickedThisRound++
         }
       }
+      // If no niche had anything left this round, we're out of candidates
       if (pickedThisRound === 0) break
     }
 
-    // Mark invalid phones as attempted
+    // Mark invalid phones as attempted (so we never re-pick them)
     if (invalidPhoneLeadIds.length > 0) {
       await supabase
         .from('leads')
@@ -185,27 +214,29 @@ export default async function handler(req, res) {
       return res.status(200).json({
         success: true,
         count: 0,
-        message: 'No valid clinic/real-estate leads available for outreach today',
+        message: 'No valid leads available for outreach today',
         invalidPhonesSkipped: invalidPhoneLeadIds.length,
       })
     }
 
-    // 6. AI-generate personalized messages (with concurrency + fallback)
+    // 5. AI-generate personalized messages (with concurrency + fallback)
+    //    Returns array: [{ leadId, message, source: 'ai'|'fallback', error? }]
     const aiResults = await generateMessagesForLeads(selectedLeads, {
       batchSize: 5,
-      delayMs: 2000,
+      delayMs: 2000,  // 2s between batches → safely under 30 req/min
     })
 
+    // Map results back to leads
     const resultByLeadId = new Map(aiResults.map(r => [r.leadId, r]))
 
-    // 7. Build queue rows
+    // 6. Build queue rows with generated messages
     const queueRows = []
     let aiCount = 0
     let fallbackCount = 0
 
     for (const lead of selectedLeads) {
       const result = resultByLeadId.get(lead.id)
-      if (!result) continue
+      if (!result) continue   // shouldn't happen, but safety
 
       if (result.source === 'ai') aiCount++
       else fallbackCount++
@@ -229,13 +260,13 @@ export default async function handler(req, res) {
       })
     }
 
-    // 8. Insert into queue
+    // 7. Insert into queue
     const { error: insertErr } = await supabase
       .from('outreach_queue')
       .insert(queueRows)
     if (insertErr) return res.status(500).json({ error: insertErr.message })
 
-    // 9. Mark leads as attempted
+    // 8. Mark leads as attempted
     const leadIds = queueRows.map(r => r.lead_id)
     await supabase
       .from('leads')
