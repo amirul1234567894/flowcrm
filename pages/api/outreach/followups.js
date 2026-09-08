@@ -1,4 +1,4 @@
-// pages/api/outreach/followups.js
+﻿// pages/api/outreach/followups.js
 // === Layer 3: AI-Powered Follow-ups for All Niches ===
 //
 // Returns leads that need a follow-up message today, with AI-generated
@@ -10,9 +10,9 @@
 //   Day 14: Final reach-out (fu3_sent)
 //
 // AUTO-SKIP rules:
-//   • Status anything other than 'New Lead' or 'Contacted' → skip
-//   • Lead has any inbound message → skip (they replied)
-//   • Already past Day 14 (fu3_sent=true) → skip
+//   â€¢ Status anything other than 'New Lead' or 'Contacted' â†’ skip
+//   â€¢ Lead has any inbound message â†’ skip (they replied)
+//   â€¢ Already past Day 14 (fu3_sent=true) â†’ skip
 //
 // AI strategy:
 //   - Same Groq-based personalization as fresh outreach
@@ -24,7 +24,7 @@ import { getServiceClient } from '../../../lib/supabase'
 const SENDER_NAME = process.env.SENDER_NAME || 'Sami'
 const SITE = process.env.MARKETING_SITE_URL || 'https://www.autoflowa.in/'
 
-// Niche context — broader automation services per niche, not just WhatsApp.
+// Niche context â€” broader automation services per niche, not just WhatsApp.
 // AI picks ONE relevant service per follow-up so messages stay focused.
 const NICHE_CONTEXT = {
   clinic:     { pain: 'missed appointments and manual scheduling',         services: 'appointment reminder automation, patient CRM, online booking' },
@@ -99,45 +99,45 @@ function buildFollowupPrompt(lead, stage) {
   // Language-specific examples per stage
   const hinglishExamples = {
     day3: `Hinglish example for day 3 (very short, gentle):
-"Namaste [name], Sami yahan — kuch din pehle apko message kiya tha automation ke baare mein. Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek 'later' ya 'not interested' reply kar dijiye, mujhe pata chal jayega. — Sami"`,
+"Namaste [name], Sami yahan â€” kuch din pehle apko message kiya tha automation ke baare mein. Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek 'later' ya 'not interested' reply kar dijiye, mujhe pata chal jayega. â€” Sami"`,
 
     day7: `Hinglish example for day 7 (use case, no fake stats):
-"Namaste [name], ek aur message, phir bandh kar dunga. Jo small clinics ke saath kaam karta hoon, unmein common problem hai — manually appointment reminders bhejna ya call karna, jo bohot time leta hai. WhatsApp pe ye automatic ho jaata hai. Agar curious ho to 'show me' reply kar dijiye, 2-minute ka demo bhej dunga. — Sami"`,
+"Namaste [name], ek aur message, phir bandh kar dunga. Jo small clinics ke saath kaam karta hoon, unmein common problem hai â€” manually appointment reminders bhejna ya call karna, jo bohot time leta hai. WhatsApp pe ye automatic ho jaata hai. Agar curious ho to 'show me' reply kar dijiye, 2-minute ka demo bhej dunga. â€” Sami"`,
 
     day14: `Hinglish example for day 14 (polite close):
-"Namaste [name], ye mera last message hai — promise. Jab bhi ready ho, available hoon: ${SITE}. Apke business ke liye best wishes! — Sami"`
+"Namaste [name], ye mera last message hai â€” promise. Jab bhi ready ho, available hoon: ${SITE}. Apke business ke liye best wishes! â€” Sami"`
   }
 
   const stageInstructions = {
-    day3: `This is a DAY 3 follow-up — gentle check-in only.
+    day3: `This is a DAY 3 follow-up â€” gentle check-in only.
 - Keep it VERY short (max 50 words)
 - Reference the previous message politely
 - Acknowledge they might be busy
 - No pressure, no new pitch, no features
 - Invite a simple "later" or "not interested" reply
-- Sign off with "— ${SENDER_NAME}"`,
+- Sign off with "â€” ${SENDER_NAME}"`,
 
-    day7: `This is a DAY 7 follow-up — different angle than the initial message.
+    day7: `This is a DAY 7 follow-up â€” different angle than the initial message.
 - Keep it short (max 80 words)
 - Open with something like "One more message, then I'll stop" (or Hinglish equivalent)
-- Share ONE specific use case — be GENERIC, no named clients
+- Share ONE specific use case â€” be GENERIC, no named clients
 - Do NOT invent fake statistics
 - Invite a "show me" reply if they want a walkthrough
-- Sign off with "— ${SENDER_NAME}"`,
+- Sign off with "â€” ${SENDER_NAME}"`,
 
-    day14: `This is a DAY 14 FINAL follow-up — polite close.
+    day14: `This is a DAY 14 FINAL follow-up â€” polite close.
 - Keep it VERY short (max 40 words)
 - Say this is the last message
 - No pressure, leave door open
 - Wish them well
 - Include site link: ${SITE}
-- Sign off with "— ${SENDER_NAME}"`,
+- Sign off with "â€” ${SENDER_NAME}"`,
   }
 
   const languageInstructions = language === 'hinglish'
     ? `LANGUAGE: HINGLISH (Hindi-English mix in Roman script, no Devanagari).
 Use "aap" (formal you), mix English business terms (WhatsApp, automation, demo) as-is.
-Greeting: "Namaste [name]," — feels personal and Indian.
+Greeting: "Namaste [name]," â€” feels personal and Indian.
 Sound like a real Indian person typing on WhatsApp, not a corporate broadcast.
 
 ${hinglishExamples[stage]}`
@@ -145,7 +145,7 @@ ${hinglishExamples[stage]}`
 Greeting: "Hello [name],"
 Natural conversational tone.`
 
-  return `You are writing a follow-up WhatsApp message from ${SENDER_NAME}, who runs a business automation agency. The agency builds custom automation for small businesses — WhatsApp automation, email automation, lead generation/scraping, CRM workflows, AI agents, reporting dashboards, and custom integrations.
+  return `You are writing a follow-up WhatsApp message from ${SENDER_NAME}, who runs a business automation agency. The agency builds custom automation for small businesses â€” WhatsApp automation, email automation, lead generation/scraping, CRM workflows, AI agents, reporting dashboards, and custom integrations.
 
 Recipient:
 - Business name: ${businessName}
@@ -182,7 +182,7 @@ function cleanAIOutput(text, stage) {
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim()
 
   if (!cleaned.toLowerCase().includes(SENDER_NAME.toLowerCase())) {
-    cleaned += `\n\n— ${SENDER_NAME}`
+    cleaned += `\n\nâ€” ${SENDER_NAME}`
   }
 
   const wordCount = cleaned.split(/\s+/).length
@@ -207,39 +207,39 @@ function fallbackFollowup(lead, stage) {
     if (stage === 'day3') {
       return `${greet},
 
-${SENDER_NAME} yahan — kuch din pehle apko message kiya tha automation ke baare mein, bas follow-up kar raha hoon.
+${SENDER_NAME} yahan â€” kuch din pehle apko message kiya tha automation ke baare mein, bas follow-up kar raha hoon.
 
 Agar abhi sahi time nahi hai, bilkul koi baat nahi. Bas ek quick "later" ya "not interested" reply kar dijiye, mujhe pata chal jayega.
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
     }
 
     if (stage === 'day7') {
       const useCase = ctx
-        ? `Jo ${lead.niche || 'businesses'} ke saath kaam karta hoon, unmein common problem hai — ${ctx.pain}. ${firstService} se ye automatic ho jaata hai — koi extra staff effort nahi.`
+        ? `Jo ${lead.niche || 'businesses'} ke saath kaam karta hoon, unmein common problem hai â€” ${ctx.pain}. ${firstService} se ye automatic ho jaata hai â€” koi extra staff effort nahi.`
         : `Jo businesses ke saath kaam karta hoon, unmein manually repetitive tasks karna ek common problem hai. Custom automation se ye sab automatic ho jaata hai.`
       return `${greet},
 
-Ek aur message, phir bandh kar dunga — promise.
+Ek aur message, phir bandh kar dunga â€” promise.
 
 ${useCase}
 
 Agar curious ho to bas "show me" reply kar dijiye, 2-minute ka demo video bhej dunga.
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
     }
 
     // day14 hinglish
     return `${greet},
 
-Ye mera last message hai — promise.
+Ye mera last message hai â€” promise.
 
 Jab bhi automation explore karna ho, available hoon:
 ${SITE}
 
 Apke business ke liye best wishes!
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
   }
 
   // ===== ENGLISH FALLBACKS =====
@@ -248,11 +248,11 @@ Apke business ke liye best wishes!
   if (stage === 'day3') {
     return `${greet},
 
-${SENDER_NAME} here — just following up on my message from a few days back about business automation.
+${SENDER_NAME} here â€” just following up on my message from a few days back about business automation.
 
 No pressure at all. Even a quick "later" or "not interested" helps me know whether to circle back.
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
   }
 
   if (stage === 'day7') {
@@ -267,20 +267,20 @@ ${useCase}
 
 If you'd like a quick walkthrough, just reply "show me" and I'll send a 2-minute video.
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
   }
 
   // day14 english
   return `${greet},
 
-Last message from me — promise.
+Last message from me â€” promise.
 
 Whenever you're ready to explore it:
 ${SITE}
 
 Wishing you continued success.
 
-— ${SENDER_NAME}`
+â€” ${SENDER_NAME}`
 }
 
 // Generate AI follow-up for a single lead+stage
@@ -298,7 +298,7 @@ async function generateFollowupMessage(lead, stage) {
       headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'qwen/qwen3.8-27b',
         max_tokens: 250,
         temperature: 0.7,
         messages: [
