@@ -1,7 +1,7 @@
-// pages/api/outreach/generate.js
+﻿// pages/api/outreach/generate.js
 // === Layer 3: AI-Powered Outreach Generator ===
 //
-// Daily cron (n8n) ekhane call kore — picks top N leads by score,
+// Daily cron (n8n) ekhane call kore â€” picks top N leads by score,
 // generates AI-personalized message for each using Groq, stores in outreach_queue.
 //
 // === STRATEGY (v4 - 2026 update) ===
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   const DAILY_LIMIT = parseInt(process.env.DAILY_OUTREACH_LIMIT || '12', 10)
 
   try {
-    // 1. Idempotent check — skip if pending msgs already exist for today
+    // 1. Idempotent check â€” skip if pending msgs already exist for today
     const { count: pendingCount } = await supabase
       .from('outreach_queue')
       .select('id', { count: 'exact', head: true })
@@ -95,11 +95,11 @@ export default async function handler(req, res) {
 
     const excludedPhones = new Set([...queuedPhoneSet, ...contactedPhoneSet])
 
-    // 3. Fetch eligible leads PER NICHE — locked to ALLOWED_NICHES only.
+    // 3. Fetch eligible leads PER NICHE â€” locked to ALLOWED_NICHES only.
     //    No auto-discovery, so no other niche can leak in.
     const allNiches = [...ALLOWED_NICHES]
 
-    const PER_NICHE = Math.max(DAILY_LIMIT, 12)
+    const PER_NICHE = Math.max(DAILY_LIMIT * 50, 600)
     const rawByNiche = {}
     await Promise.all(allNiches.map(async (niche) => {
       const { data: rows } = await supabase
@@ -150,7 +150,7 @@ export default async function handler(req, res) {
       candidatesByNiche[k].sort((a, b) => (b.score || 0) - (a.score || 0))
     }
 
-    // 5. Round-robin pick — but ORDERED by priority (clinic first, real estate second)
+    // 5. Round-robin pick â€” but ORDERED by priority (clinic first, real estate second)
     const selectedLeads = []
     const nicheKeys = Object.keys(candidatesByNiche).sort((a, b) => {
       const ia = PRIORITY.indexOf(a); const ib = PRIORITY.indexOf(b)
