@@ -1,4 +1,4 @@
-﻿// pages/api/outreach/followups.js
+// pages/api/outreach/followups.js
 // === Layer 3: AI-Powered Follow-ups for All Niches ===
 //
 // Returns leads that need a follow-up message today, with AI-generated
